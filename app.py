@@ -1,7 +1,7 @@
 # app.py
 """
 Parolario — Wordle in famiglia (2-3 giocatori)
-Layout Mobile-First ottimizzato per smartphone.
+Layout Mobile-First snello: griglia + input nativo, senza tastiera virtuale.
 """
 
 import streamlit as st
@@ -25,46 +25,45 @@ st.set_page_config(
 )
 
 # =========================================================
-# CSS PERSONALIZZATO — MOBILE-FIRST
+# CSS PERSONALIZZATO — MOBILE-FIRST SNELO
 # =========================================================
 st.markdown("""
 <style>
     /* ============================================
-       CONTAINER PRINCIPALE — MAX 450px CENTRATO
+       CONTAINER — MAX 450px, PADDING MINIMO
        ============================================ */
     .main .block-container {
         max-width: 450px !important;
-        padding-top: 0.75rem !important;
-        padding-bottom: 1rem !important;
-        padding-left: 0.75rem !important;
-        padding-right: 0.75rem !important;
+        padding-top: 0.4rem !important;
+        padding-bottom: 0.4rem !important;
+        padding-left: 0.6rem !important;
+        padding-right: 0.6rem !important;
         margin: auto !important;
     }
     .stApp { background-color: #121213; }
 
-    /* Rimuovi margini extra degli elementi Streamlit */
+    /* Azzera gap verticali tra elementi Streamlit */
+    div[data-testid="stVerticalBlock"] > div { gap: 0.25rem !important; }
     .element-container { margin-bottom: 0 !important; }
-    div[data-testid="stVerticalBlock"] > div { gap: 0.35rem !important; }
     div[data-testid="column"] { padding: 0 !important; }
 
     /* ============================================
-       HEADER COMPATTO — 1 SINGOLA RIGA
+       HEADER COMPATTO (1 RIGA + 3 BOTTONI PICCOLI)
        ============================================ */
     .header-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 4px 0;
-        margin-bottom: 0.5rem;
-        gap: 8px;
+        padding: 2px 0;
+        margin-bottom: 4px;
+        gap: 6px;
     }
     .header-title {
-        font-size: 1.25rem;
+        font-size: 1.2rem;
         font-weight: 800;
         color: #ffffff;
         letter-spacing: 0.3px;
         white-space: nowrap;
-        flex-shrink: 0;
     }
     .header-player {
         display: flex;
@@ -73,8 +72,8 @@ st.markdown("""
         background: #1a1a1b;
         border: 1px solid #3a3a3c;
         border-radius: 999px;
-        padding: 4px 6px 4px 12px;
-        font-size: 0.85rem;
+        padding: 3px 10px;
+        font-size: 0.8rem;
         color: #ffffff;
         font-weight: 600;
         max-width: 55%;
@@ -86,14 +85,24 @@ st.markdown("""
         text-overflow: ellipsis;
     }
 
+    /* Bottoni header molto compatti */
+    .header-btns .stButton > button {
+        min-height: 32px !important;
+        font-size: 0.75rem !important;
+        padding: 0.2rem 0.4rem !important;
+        border-radius: 6px !important;
+        background: #1a1a1b !important;
+        border: 1px solid #3a3a3c !important;
+    }
+
     /* ============================================
-       GRIGLIA DI GIOCO — COMPATTA E CENTRATA
+       GRIGLIA — TESSERE GRANDI E LEGGIBILI
        ============================================ */
     .grid-wrapper {
         display: flex;
         flex-direction: column;
         align-items: center;
-        margin: 0.5rem 0;
+        margin: 0.3rem 0;
     }
     .grid-row {
         display: flex;
@@ -102,12 +111,12 @@ st.markdown("""
         margin-bottom: 5px;
     }
     .grid-cell {
-        width: 56px;
-        height: 56px;
+        width: 62px;
+        height: 62px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 26px;
+        font-size: 30px;
         font-weight: 800;
         border: 2px solid #3a3a3c;
         border-radius: 6px;
@@ -128,61 +137,78 @@ st.markdown("""
     }
 
     /* ============================================
-       INPUT FISICO + TASTIERA VIRTUALE
+       INPUT + PULSANTE INVIO — GRANDI E TOUCH
        ============================================ */
     .stTextInput input {
-        font-size: 1rem !important;
-        padding: 0.55rem 0.7rem !important;
+        font-size: 1.35rem !important;
+        font-weight: 700 !important;
+        padding: 0.7rem 0.8rem !important;
         text-transform: uppercase;
+        text-align: center;
+        letter-spacing: 4px;
         background: #1a1a1b !important;
         color: #fff !important;
-        border: 1px solid #3a3a3c !important;
-        border-radius: 8px !important;
-        height: 44px !important;
+        border: 2px solid #3a3a3c !important;
+        border-radius: 10px !important;
+        height: 54px !important;
     }
-    .stTextInput input::placeholder { color: #666 !important; text-transform: none; }
+    .stTextInput input::placeholder {
+        color: #555 !important;
+        text-transform: none;
+        letter-spacing: normal;
+        font-weight: 400;
+        font-size: 0.95rem;
+    }
+    .stTextInput input:focus {
+        border-color: #6aaa64 !important;
+        box-shadow: 0 0 0 2px rgba(106,170,100,0.3) !important;
+    }
+
+    /* Bottone "Invia" grande e verde */
+    .btn-invia > button {
+        background: #6aaa64 !important;
+        border-color: #6aaa64 !important;
+        color: #ffffff !important;
+        min-height: 54px !important;
+        font-size: 1.6rem !important;
+        border-radius: 10px !important;
+        font-weight: 800 !important;
+    }
+    .btn-invia > button:hover {
+        background: #7abb74 !important;
+    }
+    .btn-invia > button:active {
+        transform: scale(0.95);
+    }
+
+    /* Bottone suggerimento compatto */
+    .hint-btn > button {
+        background: #2a2a1b !important;
+        border: 1px solid #c9b458 !important;
+        color: #c9b458 !important;
+        min-height: 40px !important;
+        font-size: 0.85rem !important;
+        border-radius: 8px !important;
+    }
+    .hint-btn > button:hover {
+        background: #3a3a2b !important;
+    }
 
     /* Bottoni generici */
     .stButton > button {
         width: 100%;
-        font-size: 0.95rem !important;
         font-weight: 700 !important;
-        padding: 0.5rem 0.4rem !important;
-        min-height: 46px;
-        border-radius: 8px !important;
         background: #1a1a1b !important;
         color: #ffffff !important;
         border: 1px solid #3a3a3c !important;
+        border-radius: 8px !important;
         transition: all 0.1s ease;
     }
     .stButton > button:hover {
         background: #2a2a2c !important;
         border-color: #6aaa64 !important;
     }
-    .stButton > button:focus {
-        box-shadow: 0 0 0 2px #6aaa64 !important;
-    }
-    .stButton > button:active {
-        transform: scale(0.97);
-    }
-
-    /* Bottoni speciali tastiera (INVIO/⌫) */
-    .key-special > button {
-        background: #565758 !important;
-        border-color: #565758 !important;
-        font-size: 1.1rem !important;
-    }
-    .key-special > button:hover {
-        background: #6aaa64 !important;
-        border-color: #6aaa64 !important;
-    }
-    .key-enter > button {
-        background: #6aaa64 !important;
-        border-color: #6aaa64 !important;
-    }
-    .key-enter > button:hover {
-        background: #7abb74 !important;
-    }
+    .stButton > button:active { transform: scale(0.97); }
 
     /* Bottoni modalità */
     .mode-btn > button {
@@ -191,20 +217,16 @@ st.markdown("""
         border-radius: 12px !important;
     }
 
-    /* Bottone suggerimento */
-    .hint-btn > button {
-        background: #2a2a1b !important;
-        border-color: #c9b458 !important;
-        color: #c9b458 !important;
-        min-height: 42px !important;
-    }
-    .hint-btn > button:hover {
-        background: #3a3a2b !important;
-    }
-
     /* ============================================
        ALTRI COMPONENTI
        ============================================ */
+    .stAlert {
+        background: #1a1a1b !important;
+        border-radius: 10px !important;
+        padding: 0.5rem 0.8rem !important;
+        font-size: 0.85rem !important;
+    }
+
     .leader-card {
         background: #1a1a1b;
         border-radius: 10px;
@@ -215,13 +237,6 @@ st.markdown("""
     .leader-card.me { border-left-color: #c9b458; background: #232324; }
     .leader-name { font-size: 1rem; font-weight: 700; color: #ffffff; }
     .leader-stats { font-size: 0.8rem; color: #b0b0b0; margin-top: 2px; }
-
-    .stAlert {
-        background: #1a1a1b !important;
-        border-radius: 10px !important;
-        padding: 0.6rem 0.9rem !important;
-        font-size: 0.9rem !important;
-    }
 
     .live-dot {
         display: inline-block;
@@ -248,7 +263,6 @@ st.markdown("""
     .badge-card {
         width: 95px; padding: 10px 6px; border-radius: 10px;
         text-align: center; border: 2px solid #3a3a3c; background: #1a1a1b;
-        transition: all 0.2s;
     }
     .badge-card.earned {
         border-color: #c9b458;
@@ -289,10 +303,18 @@ st.markdown("""
        RESPONSIVE — SCHERMI MOLTO STRETTI
        ============================================ */
     @media (max-width: 380px) {
-        .grid-cell { width: 50px; height: 50px; font-size: 22px; }
+        .grid-cell { width: 54px; height: 54px; font-size: 26px; }
         .grid-row { gap: 4px; margin-bottom: 4px; }
-        .header-title { font-size: 1.1rem; }
-        .header-player { font-size: 0.75rem; padding: 3px 5px 3px 10px; }
+        .header-title { font-size: 1rem; }
+        .header-player { font-size: 0.72rem; padding: 2px 8px; }
+        .stTextInput input { height: 50px !important; letter-spacing: 3px; }
+        .btn-invia > button { min-height: 50px !important; }
+    }
+
+    /* Schermi bassi (iPhone SE in landscape, ecc.) */
+    @media (max-height: 700px) {
+        .grid-cell { width: 52px; height: 52px; font-size: 24px; }
+        .grid-row { margin-bottom: 4px; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -376,6 +398,29 @@ def rinomina_utente(vecchio: str, nuovo: str) -> bool:
     salva_dati(d)
     return True
 
+def elimina_utente(nome: str) -> bool:
+    d = st.session_state.dati
+    if nome not in d["utenti"]:
+        return False
+    del d["utenti"][nome]
+    for giorno in list(d["daily_giocato"].keys()):
+        if nome in d["daily_giocato"][giorno]:
+            del d["daily_giocato"][giorno][nome]
+        if not d["daily_giocato"][giorno]:
+            del d["daily_giocato"][giorno]
+    salva_dati(d)
+    return True
+
+def reset_tutto():
+    if os.path.exists(DATA_FILE):
+        os.remove(DATA_FILE)
+    st.session_state.dati = {"utenti": {}, "daily_giocato": {}}
+    salva_dati(st.session_state.dati)
+    for k in list(st.session_state.keys()):
+        if k != "dati":
+            st.session_state.pop(k, None)
+    st.rerun()
+
 if "dati" not in st.session_state:
     st.session_state.dati = carica_dati()
 
@@ -405,13 +450,6 @@ def calcola_feedback(tentativo: str, soluzione: str):
             sol_lettere[sol_lettere.index(tentativo[i])] = None
     return risultato
 
-def aggiorna_colori_tastiera(colori_attuali: dict, tentativo: str, feedback: list):
-    priorità = {"absent": 0, "present": 1, "correct": 2}
-    for lettera, colore in zip(tentativo.upper(), feedback):
-        if lettera not in colori_attuali or priorità[colore] > priorità[colori_attuali[lettera]]:
-            colori_attuali[lettera] = colore
-    return colori_attuali
-
 def calcola_punti(numero_tentativo: int) -> int:
     return max(0, MAX_TRIES + 1 - numero_tentativo)
 
@@ -436,7 +474,6 @@ def reset_partita(mod: str):
     st.session_state.soluzione = parola_del_giorno() if mod == "daily" else parola_casuale()
     st.session_state.tentativi = []
     st.session_state.corrente = ""
-    st.session_state.colori_tastiera = {}
     st.session_state.finita = False
     st.session_state.vinto = False
     st.session_state.punteggio_assegnato = False
@@ -519,15 +556,8 @@ def registra_sconfitta(utente: str, modalita: str):
 # =========================================================
 # AZIONI
 # =========================================================
-def aggiungi_lettera(l):
-    if len(st.session_state.corrente) < WORD_LEN and not st.session_state.finita:
-        st.session_state.corrente += l
-
-def rimuovi_lettera():
-    st.session_state.corrente = st.session_state.corrente[:-1]
-
-def invia_tentativo():
-    parola = st.session_state.corrente.upper().strip()
+def invia_tentativo(parola_input: str = None):
+    parola = (parola_input or st.session_state.corrente).upper().strip()
     if len(parola) != WORD_LEN:
         st.toast("La parola deve avere 5 lettere!", icon="⚠️")
         return
@@ -536,9 +566,6 @@ def invia_tentativo():
         return
     fb = calcola_feedback(parola, st.session_state.soluzione)
     st.session_state.tentativi.append((parola, fb))
-    st.session_state.colori_tastiera = aggiorna_colori_tastiera(
-        st.session_state.colori_tastiera, parola, fb
-    )
     st.session_state.corrente = ""
     if parola == st.session_state.soluzione:
         st.session_state.finita = True
@@ -562,17 +589,16 @@ def usa_suggerimento():
     if utente in d["utenti"]:
         d["utenti"][utente]["suggerimenti_usati"] += 1
         salva_dati(d)
-    st.toast(f"💡 La lettera in posizione {pos+1} è **{lettera}**", icon="💡")
+    st.toast(f"💡 Posizione {pos+1}: **{lettera}**", icon="💡")
 
 # =========================================================
-# HEADER COMPATTO — 1 RIGA
+# HEADER COMPATTO
 # =========================================================
 def render_header_compact():
-    """Header a riga singola: titolo a sinistra, pillola giocatore a destra."""
     utente = st.session_state.utente or ""
     nome_vis = utente if len(utente) <= 10 else utente[:9] + "…"
 
-    # Riga unica con titolo + pillola
+    # Riga 1: titolo + pillola giocatore
     st.markdown(f"""
         <div class="header-row">
             <div class="header-title">🟩 {APP_NAME}</div>
@@ -582,8 +608,9 @@ def render_header_compact():
         </div>
     """, unsafe_allow_html=True)
 
-    # Riga compatta di bottoni sotto l'header
-    c1, c2, c3 = st.columns([1, 1, 1], gap="small")
+    # Riga 2: 3 bottoni mini
+    st.markdown('<div class="header-btns">', unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3, gap="small")
     with c1:
         if st.button("⚙️ Profilo", use_container_width=True, key="hdr_edit"):
             st.session_state.modifica_nick = True
@@ -591,7 +618,7 @@ def render_header_compact():
     with c2:
         if st.button("🔄 Cambia", use_container_width=True, key="hdr_change"):
             for k in ["utente","modalita","soluzione","tentativi","corrente",
-                      "colori_tastiera","finita","vinto","punteggio_assegnato",
+                      "finita","vinto","punteggio_assegnato",
                       "modifica_nick","suggerimento_usato","suggerimento_pos",
                       "mostra_definizione","nuovi_badges"]:
                 st.session_state.pop(k, None)
@@ -600,14 +627,15 @@ def render_header_compact():
         if st.button("🏠 Menu", use_container_width=True, key="hdr_menu"):
             st.session_state.pagina = "menu"
             for k in ["modalita","soluzione","tentativi","corrente",
-                      "colori_tastiera","finita","vinto","punteggio_assegnato",
+                      "finita","vinto","punteggio_assegnato",
                       "suggerimento_usato","suggerimento_pos","mostra_definizione",
                       "nuovi_badges"]:
                 st.session_state.pop(k, None)
             st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================================================
-# GRIGLIA DI GIOCO
+# GRIGLIA
 # =========================================================
 def render_griglia():
     sugg_pos = st.session_state.get("suggerimento_pos")
@@ -638,43 +666,6 @@ def render_griglia():
     st.markdown("".join(righe_html), unsafe_allow_html=True)
 
 # =========================================================
-# TASTIERA VIRTUALE TOUCH-FRIENDLY
-# =========================================================
-def render_tastiera():
-    """Tastiera 7-7-7-5 a tutta larghezza, tasti grandi."""
-    righe = [
-        (["Q","W","E","R","T","Y","U"], None),
-        (["I","O","P","A","S","D","F"], None),
-        (["G","H","J","K","L","Z","X"], None),
-        (["C","V","B","N","M"], "special"),
-    ]
-
-    for riga, tipo in righe:
-        n_extra = 2 if tipo == "special" else 0
-        cols = st.columns(len(riga) + n_extra, gap="small")
-        idx = 0
-        for lettera in riga:
-            with cols[idx]:
-                colore = st.session_state.colori_tastiera.get(lettera, "")
-                label = lettera
-                if st.button(label, key=f"key_{lettera}", use_container_width=True):
-                    aggiungi_lettera(lettera)
-            idx += 1
-        if tipo == "special":
-            with cols[idx]:
-                st.markdown('<div class="key-special">', unsafe_allow_html=True)
-                if st.button("⌫", key="key_back", use_container_width=True):
-                    rimuovi_lettera()
-                st.markdown('</div>', unsafe_allow_html=True)
-            idx += 1
-            with cols[idx]:
-                st.markdown('<div class="key-enter">', unsafe_allow_html=True)
-                if st.button("✔️", key="key_enter", use_container_width=True):
-                    invia_tentativo()
-                    st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
-
-# =========================================================
 # ALTRI RENDER
 # =========================================================
 def genera_risultato_condivisione():
@@ -688,7 +679,7 @@ def genera_risultato_condivisione():
 def render_classifica():
     utenti = st.session_state.dati["utenti"]
     if not utenti:
-        st.info("Nessun giocatore registrato ancora. Gioca la prima partita! 🎮")
+        st.info("Nessun giocatore registrato ancora.")
         return
     ordinati = sorted(utenti.items(), key=lambda x: (-x[1]["punti"], -x[1]["vittorie"]))
     for pos, (nome, s) in enumerate(ordinati, start=1):
@@ -698,7 +689,7 @@ def render_classifica():
         <div class="leader-card{io}">
             <div class="leader-name">{medaglia} {nome}</div>
             <div class="leader-stats">
-                🏆 <b>{s['punti']}</b> pt · ✅ {s['vittorie']}/{s['partite']} · 🔥 {s['streak']} (max {s['max_streak']})
+                🏆 <b>{s['punti']}</b> pt · ✅ {s['vittorie']}/{s['partite']} · 🔥 {s['streak']}
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -723,55 +714,83 @@ def render_coriandoli():
 # SCHERMATA 1: SELEZIONE
 # =========================================================
 def pagina_selezione():
-    st.markdown(f'<div class="header-title" style="text-align:center;font-size:1.6rem;margin:1rem 0;">🟩 {APP_NAME}</div>',
+    st.markdown(f'<div style="text-align:center;font-size:1.6rem;font-weight:800;color:#fff;margin:1rem 0 0.3rem 0;">🟩 {APP_NAME}</div>',
                 unsafe_allow_html=True)
-    st.markdown('<div class="app-subtitle" style="text-align:center;color:#a0a0a0;font-size:0.9rem;margin-bottom:1.5rem;">Chi sta giocando?</div>',
+    st.markdown('<div style="text-align:center;color:#a0a0a0;font-size:0.9rem;margin-bottom:1.2rem;">Chi sta giocando?</div>',
                 unsafe_allow_html=True)
 
     d = st.session_state.dati
     profili_esistenti = list(d["utenti"].keys())
     predefiniti = [p for p in PROFILI_PREDEFINITI if p in profili_esistenti]
+    altri = [n for n in profili_esistenti if n not in PROFILI_PREDEFINITI]
 
-    if predefiniti:
-        for nome in predefiniti:
+    if "conferma_elimina" not in st.session_state:
+        st.session_state.conferma_elimina = None
+
+    def render_profilo(nome):
+        col_login, col_del = st.columns([5, 1], gap="small")
+        with col_login:
             if st.button(f"👤 {nome}", use_container_width=True, key=f"login_{nome}"):
                 st.session_state.utente = nome
                 st.session_state.dati = carica_dati()
                 st.rerun()
+        with col_del:
+            if st.button("🗑️", use_container_width=True, key=f"del_{nome}"):
+                st.session_state.conferma_elimina = nome
+                st.rerun()
+        if st.session_state.conferma_elimina == nome:
+            st.warning(f"Eliminare **{nome}**?")
+            c1, c2 = st.columns(2, gap="small")
+            with c1:
+                if st.button("✅ Sì", use_container_width=True, key=f"conf_yes_{nome}"):
+                    elimina_utente(nome)
+                    st.session_state.conferma_elimina = None
+                    st.rerun()
+            with c2:
+                if st.button("❌ No", use_container_width=True, key=f"conf_no_{nome}"):
+                    st.session_state.conferma_elimina = None
+                    st.rerun()
 
-    altri = [n for n in profili_esistenti if n not in PROFILI_PREDEFINITI]
+    for nome in predefiniti:
+        render_profilo(nome)
+
     if altri:
-        st.markdown('<div style="color:#a0a0a0;font-size:0.8rem;margin-top:1rem;">Altri profili</div>',
+        st.markdown('<div style="color:#a0a0a0;font-size:0.8rem;margin-top:0.8rem;">Altri profili</div>',
                     unsafe_allow_html=True)
         for nome in altri:
-            if st.button(f"👤 {nome}", use_container_width=True, key=f"login_{nome}"):
-                st.session_state.utente = nome
-                st.rerun()
+            render_profilo(nome)
 
-    st.markdown('<div style="margin-top:1.2rem;"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="margin-top:1rem;"></div>', unsafe_allow_html=True)
     n_ospiti = len([n for n in profili_esistenti if n.startswith("Ospite")])
     nome_default = f"Ospite {n_ospiti + 1}" if n_ospiti > 0 or not profili_esistenti else "Ospite"
 
     with st.expander("➕ Crea un nuovo profilo"):
-        nuovo_nome = st.text_input("Nome nuovo profilo", placeholder="Es. Nonna, Zio…",
-                                    key="crea_nome")
+        nuovo_nome = st.text_input("Nome", placeholder="Es. Nonna, Zio…", key="crea_nome")
         if st.button("Crea profilo", use_container_width=True, key="btn_crea"):
             nome_finale = nuovo_nome.strip() or nome_default
             if nome_finale in d["utenti"]:
-                st.error(f"Il nome '{nome_finale}' è già in uso.")
+                st.error(f"'{nome_finale}' è già in uso.")
             else:
                 assicura_utente(nome_finale)
                 st.session_state.utente = nome_finale
                 st.rerun()
+
+    with st.expander("⚙️ Zona Admin"):
+        st.caption("⚠️ Cancella tutti i dati (irreversibile).")
+        conferma = st.text_input("Scrivi RESET per confermare", key="reset_confirm")
+        if st.button("🗑️ Cancella tutto", use_container_width=True, key="btn_reset_all"):
+            if conferma.strip().upper() == "RESET":
+                reset_tutto()
+            else:
+                st.error("Scrivi RESET per confermare.")
 
 # =========================================================
 # SCHERMATA 2: MENU
 # =========================================================
 def pagina_menu():
     render_header_compact()
-    st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
-
-    st.markdown('<h3 style="text-align:center;color:#fff;margin:0.5rem 0;font-size:1.1rem;">Scegli la modalità</h3>',
+    st.markdown('<div style="height:0.4rem;"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align:center;color:#fff;font-size:1.05rem;font-weight:700;margin:0.4rem 0;">Scegli la modalità</div>',
                 unsafe_allow_html=True)
 
     st.markdown('<div class="mode-btn">', unsafe_allow_html=True)
@@ -785,8 +804,7 @@ def pagina_menu():
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div style="height:0.4rem;"></div>', unsafe_allow_html=True)
-
+    st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
     c1, c2 = st.columns(2, gap="small")
     with c1:
         if st.button("🏆 Classifica", use_container_width=True, key="m_leader"):
@@ -798,18 +816,20 @@ def pagina_menu():
             st.rerun()
 
 # =========================================================
-# SCHERMATA 3: GIOCO
+# SCHERMATA 3: GIOCO (SNELLA)
 # =========================================================
 def pagina_gioco():
     render_header_compact()
 
-    titolo_mod = "📅 Parola del Giorno" if st.session_state.modalita == "daily" else "🎲 Gioco Illimitato"
-    st.markdown(f'<div style="text-align:center;color:#a0a0a0;font-size:0.85rem;margin:0.3rem 0 0.5rem 0;">{titolo_mod}</div>',
+    titolo_mod = "📅 Parola del Giorno" if st.session_state.modalita == "daily" else "🎲 Illimitato"
+    st.markdown(f'<div style="text-align:center;color:#a0a0a0;font-size:0.8rem;margin:0.2rem 0 0.3rem 0;">{titolo_mod}</div>',
                 unsafe_allow_html=True)
 
     render_griglia()
 
-    # Fine partita
+    # ============================================
+    # FINE PARTITA
+    # ============================================
     if st.session_state.finita:
         if st.session_state.vinto:
             n = len(st.session_state.tentativi)
@@ -830,7 +850,7 @@ def pagina_gioco():
             c1, c2 = st.columns(2, gap="small")
             with c1:
                 if st.button("📋 WhatsApp", use_container_width=True, key="copy_whats"):
-                    st.toast("Copiato! Incollalo in WhatsApp", icon="✅")
+                    st.toast("Copiato!", icon="✅")
             with c2:
                 if st.button("🔍 Definizione", use_container_width=True, key="def_btn"):
                     st.session_state.mostra_definizione = True
@@ -854,7 +874,7 @@ def pagina_gioco():
             c1, c2 = st.columns(2, gap="small")
             with c1:
                 if st.button("📋 WhatsApp", use_container_width=True, key="copy_whats_lose"):
-                    st.toast("Copiato! Incollalo in WhatsApp", icon="✅")
+                    st.toast("Copiato!", icon="✅")
             with c2:
                 if st.button("🔍 Definizione", use_container_width=True, key="def_btn_lose"):
                     st.session_state.mostra_definizione = True
@@ -865,7 +885,7 @@ def pagina_gioco():
                 st.info(f"**{p}** — [Treccani](https://www.treccani.it/vocabolario/{p.lower()}/) · "
                         f"[Wikizionario](https://it.wiktionary.org/wiki/{p.lower()})")
 
-        st.markdown('<div style="height:0.4rem;"></div>', unsafe_allow_html=True)
+        st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
         c1, c2 = st.columns(2, gap="small")
         with c1:
             if st.button("🔄 Nuova", use_container_width=True, key="end_new"):
@@ -875,51 +895,60 @@ def pagina_gioco():
             if st.button("🏠 Menu", use_container_width=True, key="end_menu"):
                 st.session_state.pagina = "menu"
                 for k in ["modalita","soluzione","tentativi","corrente",
-                          "colori_tastiera","finita","vinto","punteggio_assegnato",
+                          "finita","vinto","punteggio_assegnato",
                           "suggerimento_usato","suggerimento_pos","mostra_definizione",
                           "nuovi_badges"]:
                     st.session_state.pop(k, None)
                 st.rerun()
         return
 
-    # Input fisico compatto
-    with st.form("input_form", clear_on_submit=True):
-        col_input, col_btn = st.columns([4,1], gap="small")
-        with col_input:
-            testo = st.text_input(
-                "Parola", value="", max_chars=WORD_LEN, key="input_fisico",
-                label_visibility="collapsed",
-                placeholder="Scrivi o usa la tastiera…",
-            )
-        with col_btn:
-            inviato = st.form_submit_button("✔️", use_container_width=True)
-    if inviato and testo:
-        st.session_state.corrente = testo.upper().strip()
-        invia_tentativo()
-        st.rerun()
-
-    # Suggerimento compatto
-    if not st.session_state.suggerimento_usato:
-        st.markdown('<div class="hint-btn">', unsafe_allow_html=True)
-        if st.button("💡 Suggerimento", use_container_width=True, key="hint_btn"):
-            usa_suggerimento()
+    # ============================================
+    # INPUT + INVIO (grandi, in basso)
+    # ============================================
+    col_input, col_invia = st.columns([4, 1], gap="small")
+    with col_input:
+        testo = st.text_input(
+            "Parola",
+            value="",
+            max_chars=WORD_LEN,
+            key="input_fisico",
+            label_visibility="collapsed",
+            placeholder="Scrivi la parola…",
+            autocomplete="off",
+        )
+    with col_invia:
+        st.markdown('<div class="btn-invia">', unsafe_allow_html=True)
+        if st.button("✔️", use_container_width=True, key="btn_invia"):
+            invia_tentativo(testo)
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    render_tastiera()
-    st.caption(f"Tentativi: {len(st.session_state.tentativi)}/{MAX_TRIES}")
+    # Suggerimento + contatore tentativi (riga compatta)
+    col_hint, col_count = st.columns([3, 1], gap="small")
+    with col_hint:
+        if not st.session_state.suggerimento_usato:
+            st.markdown('<div class="hint-btn">', unsafe_allow_html=True)
+            if st.button("💡 Suggerimento (1 volta)", use_container_width=True, key="hint_btn"):
+                usa_suggerimento()
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div style="text-align:center;color:#c9b458;font-size:0.75rem;padding:0.6rem 0;">💡 Suggerimento usato</div>',
+                        unsafe_allow_html=True)
+    with col_count:
+        st.markdown(f'<div style="text-align:center;color:#a0a0a0;font-size:0.75rem;padding:0.6rem 0;">{len(st.session_state.tentativi)}/{MAX_TRIES}</div>',
+                    unsafe_allow_html=True)
 
 # =========================================================
 # SCHERMATA 4: CLASSIFICA
 # =========================================================
 def pagina_classifica():
     render_header_compact()
-    st.markdown('<h3 style="text-align:center;color:#fff;margin:0.5rem 0;font-size:1.1rem;">🏆 Classifica</h3>',
+    st.markdown('<div style="text-align:center;color:#fff;font-size:1.05rem;font-weight:700;margin:0.4rem 0;">🏆 Classifica</div>',
                 unsafe_allow_html=True)
     st.markdown('<div class="live-label"><span class="live-dot"></span>Auto-aggiornamento 30s</div>',
                 unsafe_allow_html=True)
     render_classifica()
-    st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
     if st.button("⬅️ Torna al Menu", use_container_width=True, key="back_menu"):
         st.session_state.pagina = "menu"
         st.rerun()
@@ -930,14 +959,14 @@ def pagina_classifica():
 def pagina_statistiche():
     render_header_compact()
     utente = st.session_state.utente
-    st.markdown(f'<h3 style="text-align:center;color:#fff;margin:0.5rem 0;font-size:1.1rem;">📊 {utente}</h3>',
+    st.markdown(f'<div style="text-align:center;color:#fff;font-size:1.05rem;font-weight:700;margin:0.4rem 0;">📊 {utente}</div>',
                 unsafe_allow_html=True)
 
     d = st.session_state.dati
     u = d["utenti"].get(utente)
     if not u:
-        st.info("Nessuna partita registrata. Gioca per vedere le statistiche!")
-        if st.button("⬅️ Torna al Menu", use_container_width=True, key="back_from_stats"):
+        st.info("Nessuna partita registrata.")
+        if st.button("⬅️ Menu", use_container_width=True, key="back_from_stats"):
             st.session_state.pagina = "menu"
             st.rerun()
         return
@@ -953,18 +982,17 @@ def pagina_statistiche():
             st.markdown(f'<div class="stat-item"><div class="stat-value">{val}</div>'
                         f'<div class="stat-label">{label}</div></div>', unsafe_allow_html=True)
 
-    st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
-    st.markdown('<div style="color:#fff;font-size:0.95rem;font-weight:700;margin-bottom:0.4rem;">📈 Distribuzione</div>',
+    st.markdown('<div style="color:#fff;font-size:0.9rem;font-weight:700;margin:0.6rem 0 0.3rem 0;">📈 Distribuzione</div>',
                 unsafe_allow_html=True)
     dist = u.get("tentativi_distribuzione", [0]*6)
     if any(dist):
         import pandas as pd
         df = pd.DataFrame({"Tentativi": [f"{i+1}°" for i in range(6)], "Volte": dist})
-        st.bar_chart(df, x="Tentativi", y="Volte", color="#6aaa64", height=200)
+        st.bar_chart(df, x="Tentativi", y="Volte", color="#6aaa64", height=180)
     else:
         st.caption("Nessuna vittoria ancora.")
 
-    st.markdown('<div style="color:#fff;font-size:0.95rem;font-weight:700;margin:0.75rem 0 0.4rem 0;">🏅 Trofei</div>',
+    st.markdown('<div style="color:#fff;font-size:0.9rem;font-weight:700;margin:0.6rem 0 0.3rem 0;">🏅 Trofei</div>',
                 unsafe_allow_html=True)
     earned = u.get("badges", [])
     st.caption(f"🏆 {len(earned)}/{len(BADGES)} sbloccati")
@@ -983,7 +1011,6 @@ def pagina_statistiche():
     badge_html += '</div>'
     st.markdown(badge_html, unsafe_allow_html=True)
 
-    st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
     if st.button("⬅️ Torna al Menu", use_container_width=True, key="back_from_stats2"):
         st.session_state.pagina = "menu"
         st.rerun()
@@ -993,7 +1020,7 @@ def pagina_statistiche():
 # =========================================================
 def pagina_modifica_nick():
     render_header_compact()
-    st.markdown('<h3 style="text-align:center;color:#fff;margin:0.5rem 0;font-size:1.1rem;">✏️ Modifica Nickname</h3>',
+    st.markdown('<div style="text-align:center;color:#fff;font-size:1.05rem;font-weight:700;margin:0.4rem 0;">✏️ Modifica Nickname</div>',
                 unsafe_allow_html=True)
     st.markdown(f'<p style="text-align:center;color:#a0a0a0;font-size:0.85rem;">Attuale: <b style="color:#fff;">'
                 f'{st.session_state.utente}</b></p>', unsafe_allow_html=True)
@@ -1015,10 +1042,10 @@ def pagina_modifica_nick():
                 st.session_state.utente = nome_pulito
                 st.session_state.modifica_nick = False
                 st.session_state.pagina = "menu"
-                st.success(f"Nickname aggiornato in '{nome_pulito}'!")
+                st.success(f"Aggiornato in '{nome_pulito}'!")
                 st.rerun()
             else:
-                st.error("Nome già in uso da un altro giocatore.")
+                st.error("Nome già in uso.")
     with c2:
         if st.button("❌ Annulla", use_container_width=True, key="nick_cancel"):
             st.session_state.modifica_nick = False
@@ -1036,6 +1063,7 @@ defaults = {
     "suggerimento_pos": None,
     "mostra_definizione": False,
     "nuovi_badges": [],
+    "conferma_elimina": None,
 }
 for k, v in defaults.items():
     st.session_state.setdefault(k, v)

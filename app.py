@@ -1,7 +1,7 @@
 # app.py
 """
 Parolario — Wordle in famiglia (2-3 giocatori)
-Layout Mobile-First con palloncini lenti alla vittoria.
+Layout Mobile-First con palloncini lenti alla vittoria e reset input automatico.
 """
 
 import streamlit as st
@@ -25,7 +25,7 @@ st.set_page_config(
 )
 
 # =========================================================
-# CSS PERSONALIZZATO
+# CSS PERSONALIZZATO — MOBILE-FIRST
 # =========================================================
 st.markdown("""
 <style>
@@ -333,7 +333,6 @@ st.markdown("""
         animation-iteration-count: 1;
         animation-fill-mode: forwards;
     }
-    /* Nodino del palloncino (triangolino alla base) */
     .balloon::after {
         content: "";
         position: absolute;
@@ -347,7 +346,6 @@ st.markdown("""
         border-top: 8px solid currentColor;
         opacity: 0.85;
     }
-    /* Filo del palloncino */
     .balloon::before {
         content: "";
         position: absolute;
@@ -358,7 +356,6 @@ st.markdown("""
         background: rgba(255,255,255,0.35);
         transform: translateX(-50%);
     }
-    /* Riflesso lucido sul palloncino */
     .balloon .shine {
         position: absolute;
         top: 12%;
@@ -397,7 +394,7 @@ st.markdown("""
     footer {visibility: hidden;}
 
     /* ============================================
-       RESPONSIVE — SCHERMI STRETTI E BASSI
+       RESPONSIVE
        ============================================ */
     @media (max-width: 380px) {
         .grid-cell { width: 50px; height: 50px; font-size: 24px; }
@@ -407,7 +404,6 @@ st.markdown("""
         .btn-invia > button { min-height: 46px !important; height: 46px !important; }
     }
 
-    /* Schermi bassi: comprimi ulteriormente per far stare tutto */
     @media (max-height: 720px) {
         .grid-cell { width: 50px; height: 50px; font-size: 24px; }
         .grid-row { margin-bottom: 3px; }
@@ -587,8 +583,8 @@ def reset_partita(mod: str):
     st.session_state.suggerimento_pos = None
     st.session_state.mostra_definizione = False
     st.session_state.nuovi_badges = []
-    # Reset input testo
-    st.session_state.input_parola = ""
+    # Reset input incrementando la versione (key dinamica)
+    st.session_state.input_version += 1
 
 # =========================================================
 # BADGE
@@ -665,9 +661,11 @@ def registra_sconfitta(utente: str, modalita: str):
 # AZIONI
 # =========================================================
 def invia_tentativo(parola_input: str = None):
+    """Elabora il tentativo. Incrementa input_version per svuotare il campo."""
     parola = (parola_input or "").upper().strip()
-    # Reset input SEMPRE (anche se parola non valida)
-    st.session_state.input_parola = ""
+
+    # Incrementa la versione → al prossimo rerun il widget viene ricreato vuoto
+    st.session_state.input_version += 1
 
     if len(parola) != WORD_LEN:
         st.toast("La parola deve avere 5 lettere!", icon="⚠️")
@@ -726,7 +724,7 @@ def render_sidebar():
             for k in ["utente","modalita","soluzione","tentativi","corrente",
                       "finita","vinto","punteggio_assegnato",
                       "modifica_nick","suggerimento_usato","suggerimento_pos",
-                      "mostra_definizione","nuovi_badges","pagina","input_parola"]:
+                      "mostra_definizione","nuovi_badges","pagina","input_version"]:
                 st.session_state.pop(k, None)
             st.rerun()
 
@@ -761,6 +759,10 @@ def render_sidebar():
 # =========================================================
 def render_griglia():
     sugg_pos = st.session_state.get("suggerimento_pos")
+    # Recupera il testo corrente dalla key dinamica
+    key_dinamica = f"input_parola_{st.session_state.get('input_version', 0)}"
+    corrente = st.session_state.get(key_dinamica, "").upper()
+
     righe_html = ['<div class="grid-wrapper">']
     for r in range(MAX_TRIES):
         celle = []
@@ -769,7 +771,6 @@ def render_griglia():
             for lettera, colore in zip(parola, fb):
                 celle.append(f'<div class="grid-cell {colore}">{lettera}</div>')
         elif r == len(st.session_state.tentativi) and not st.session_state.finita:
-            corrente = st.session_state.get("input_parola", "").upper() or st.session_state.corrente
             for i in range(WORD_LEN):
                 if i < len(corrente):
                     classe = "filled"
@@ -820,20 +821,13 @@ def render_classifica():
 def render_palloncini():
     """Palloncini che salgono lentamente (5-6s), morbidi e rilassanti."""
     colori = [
-        "#6aaa64",  # verde wordle
-        "#c9b458",  # giallo wordle
-        "#e74c3c",  # rosso
-        "#3498db",  # blu
-        "#f39c12",  # arancione
-        "#9b59b6",  # viola
-        "#1abc9c",  # teal
-        "#e91e63",  # rosa
-        "#ff5722",  # corallo
+        "#6aaa64", "#c9b458", "#e74c3c", "#3498db", "#f39c12",
+        "#9b59b6", "#1abc9c", "#e91e63", "#ff5722",
     ]
     palloncini = []
     for _ in range(18):
         colore = random.choice(colori)
-        left = random.randint(5, 90)  # percentuale
+        left = random.randint(5, 90)
         delay = round(random.uniform(0, 2.0), 2)
         durata = round(random.uniform(5.0, 6.5), 2)
         width = random.randint(38, 58)
@@ -971,7 +965,7 @@ def pagina_gioco():
                                                   st.session_state.modalita, n)
                 st.session_state.punteggio_assegnato = True
                 st.session_state.nuovi_badges = nuovi_badges
-                render_palloncini()  # <-- Palloncini lenti
+                render_palloncini()
             render_nuovi_badges(st.session_state.get("nuovi_badges", []))
             st.success(f"🎉 Bravissimo! In {n} tentativi — **+{punti} punti!**")
 
@@ -1034,19 +1028,17 @@ def pagina_gioco():
         return
 
     # ============================================
-    # INPUT + INVIO
+    # INPUT + INVIO (key dinamica per reset automatico)
     # ============================================
-    # Garantisce che la chiave di stato esista
-    if "input_parola" not in st.session_state:
-        st.session_state.input_parola = ""
+    key_input = f"input_parola_{st.session_state.input_version}"
 
     col_input, col_invia = st.columns([4, 1], gap="small")
     with col_input:
         testo = st.text_input(
             "Parola",
-            value=st.session_state.input_parola,
+            value="",
             max_chars=WORD_LEN,
-            key="input_parola",
+            key=key_input,
             label_visibility="collapsed",
             placeholder="Scrivi la parola…",
             autocomplete="off",
@@ -1057,12 +1049,6 @@ def pagina_gioco():
             invia_tentativo(testo)
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-
-    # NOTA: L'invio con il tasto "Invio" della tastiera del telefono
-    # non è direttamente intercettabile in Streamlit.
-    # Il campo si svuota automaticamente quando l'utente preme il bottone ✔️.
-    # Se l'utente preme Invio, Streamlit ricarica l'input dal session_state,
-    # quindi il valore rimane finché non preme ✔️ o scrive altro.
 
     # Suggerimento + contatore
     col_hint, col_count = st.columns([3, 1], gap="small")
@@ -1199,7 +1185,7 @@ defaults = {
     "mostra_definizione": False,
     "nuovi_badges": [],
     "conferma_elimina": None,
-    "input_parola": "",
+    "input_version": 0,
 }
 for k, v in defaults.items():
     st.session_state.setdefault(k, v)

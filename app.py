@@ -1,7 +1,7 @@
 # app.py
 """
 Parolario — Wordle in famiglia (2-3 giocatori)
-Layout Mobile-First snello: griglia + input nativo, senza tastiera virtuale.
+Layout Mobile-First: sidebar per gestione, schermo pulito per il gioco.
 """
 
 import streamlit as st
@@ -21,88 +21,64 @@ st.set_page_config(
     page_title=APP_NAME,
     page_icon="🟩",
     layout="centered",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="collapsed",  # <-- collassata di default
 )
 
 # =========================================================
-# CSS PERSONALIZZATO — MOBILE-FIRST SNELO
+# CSS PERSONALIZZATO — MOBILE-FIRST DEFINITIVO
 # =========================================================
 st.markdown("""
 <style>
     /* ============================================
-       CONTAINER — MAX 450px, PADDING MINIMO
+       1. PADDING TOP ZERO — NIENTE SPAZIO VUOTO
        ============================================ */
     .main .block-container {
-        max-width: 450px !important;
-        padding-top: 0.4rem !important;
-        padding-bottom: 0.4rem !important;
+        padding-top: 0.5rem !important;
+        padding-bottom: 1rem !important;
         padding-left: 0.6rem !important;
         padding-right: 0.6rem !important;
+        max-width: 420px !important;
         margin: auto !important;
+    }
+    header[data-testid="stHeader"] {
+        display: none !important;  /* Nasconde l'header trasparente */
     }
     .stApp { background-color: #121213; }
 
     /* Azzera gap verticali tra elementi Streamlit */
-    div[data-testid="stVerticalBlock"] > div { gap: 0.25rem !important; }
+    div[data-testid="stVerticalBlock"] > div { gap: 0.2rem !important; }
     .element-container { margin-bottom: 0 !important; }
     div[data-testid="column"] { padding: 0 !important; }
 
     /* ============================================
-       HEADER COMPATTO (1 RIGA + 3 BOTTONI PICCOLI)
+       2. TITOLO COMPATTO (1 RIGA SOLA)
        ============================================ */
-    .header-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 2px 0;
-        margin-bottom: 4px;
-        gap: 6px;
-    }
-    .header-title {
-        font-size: 1.2rem;
+    .top-title {
+        text-align: center;
+        font-size: 1.4rem;
         font-weight: 800;
         color: #ffffff;
-        letter-spacing: 0.3px;
-        white-space: nowrap;
+        letter-spacing: 0.5px;
+        margin: 0 0 0.4rem 0;
+        padding: 0;
     }
-    .header-player {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        background: #1a1a1b;
-        border: 1px solid #3a3a3c;
-        border-radius: 999px;
-        padding: 3px 10px;
+    .mode-label {
+        text-align: center;
+        color: #a0a0a0;
         font-size: 0.8rem;
-        color: #ffffff;
-        font-weight: 600;
-        max-width: 55%;
-        overflow: hidden;
-    }
-    .header-player .player-name {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    /* Bottoni header molto compatti */
-    .header-btns .stButton > button {
-        min-height: 32px !important;
-        font-size: 0.75rem !important;
-        padding: 0.2rem 0.4rem !important;
-        border-radius: 6px !important;
-        background: #1a1a1b !important;
-        border: 1px solid #3a3a3c !important;
+        margin: 0 0 0.4rem 0;
     }
 
     /* ============================================
-       GRIGLIA — TESSERE GRANDI E LEGGIBILI
+       3. GRIGLIA — GRANDE, CENTRATA, SENZA SCROLL
        ============================================ */
     .grid-wrapper {
         display: flex;
         flex-direction: column;
         align-items: center;
-        margin: 0.3rem 0;
+        justify-content: center;
+        margin: 0.3rem auto;
+        width: 100%;
     }
     .grid-row {
         display: flex;
@@ -137,7 +113,7 @@ st.markdown("""
     }
 
     /* ============================================
-       INPUT + PULSANTE INVIO — GRANDI E TOUCH
+       4. INPUT + PULSANTE INVIO
        ============================================ */
     .stTextInput input {
         font-size: 1.35rem !important;
@@ -164,7 +140,7 @@ st.markdown("""
         box-shadow: 0 0 0 2px rgba(106,170,100,0.3) !important;
     }
 
-    /* Bottone "Invia" grande e verde */
+    /* Bottone "Invia" */
     .btn-invia > button {
         background: #6aaa64 !important;
         border-color: #6aaa64 !important;
@@ -174,14 +150,10 @@ st.markdown("""
         border-radius: 10px !important;
         font-weight: 800 !important;
     }
-    .btn-invia > button:hover {
-        background: #7abb74 !important;
-    }
-    .btn-invia > button:active {
-        transform: scale(0.95);
-    }
+    .btn-invia > button:hover { background: #7abb74 !important; }
+    .btn-invia > button:active { transform: scale(0.95); }
 
-    /* Bottone suggerimento compatto */
+    /* Bottone suggerimento */
     .hint-btn > button {
         background: #2a2a1b !important;
         border: 1px solid #c9b458 !important;
@@ -190,9 +162,7 @@ st.markdown("""
         font-size: 0.85rem !important;
         border-radius: 8px !important;
     }
-    .hint-btn > button:hover {
-        background: #3a3a2b !important;
-    }
+    .hint-btn > button:hover { background: #3a3a2b !important; }
 
     /* Bottoni generici */
     .stButton > button {
@@ -218,7 +188,61 @@ st.markdown("""
     }
 
     /* ============================================
-       ALTRI COMPONENTI
+       5. SIDEBAR
+       ============================================ */
+    section[data-testid="stSidebar"] {
+        background: #0e0e10 !important;
+        border-right: 1px solid #2a2a2c;
+    }
+    section[data-testid="stSidebar"] .block-container {
+        padding-top: 1rem !important;
+        padding-left: 0.8rem !important;
+        padding-right: 0.8rem !important;
+        max-width: 100% !important;
+    }
+    section[data-testid="stSidebar"] .stButton > button {
+        font-size: 0.9rem !important;
+        min-height: 44px !important;
+        margin-bottom: 4px;
+    }
+    .sidebar-title {
+        text-align: center;
+        font-size: 1.2rem;
+        font-weight: 800;
+        color: #ffffff;
+        margin-bottom: 0.6rem;
+    }
+    .sidebar-player {
+        text-align: center;
+        background: #1a1a1b;
+        border: 1px solid #3a3a3c;
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin-bottom: 1rem;
+    }
+    .sidebar-player .label {
+        color: #a0a0a0;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .sidebar-player .name {
+        color: #ffffff;
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin-top: 2px;
+    }
+    .sidebar-section {
+        color: #a0a0a0;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin: 1rem 0 0.4rem 0;
+        font-weight: 600;
+    }
+
+    /* ============================================
+       6. ALTRI COMPONENTI
        ============================================ */
     .stAlert {
         background: #1a1a1b !important;
@@ -258,7 +282,6 @@ st.markdown("""
         margin-bottom: 0.5rem;
     }
 
-    /* Badge/trofei */
     .badge-grid { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 0.75rem 0; }
     .badge-card {
         width: 95px; padding: 10px 6px; border-radius: 10px;
@@ -274,47 +297,71 @@ st.markdown("""
     .badge-name { font-size: 0.75rem; font-weight: 700; color: #fff; }
     .badge-desc { font-size: 0.62rem; color: #a0a0a0; margin-top: 2px; line-height: 1.25; }
 
-    /* Statistiche */
     .stat-item { text-align: center; }
     .stat-value { font-size: 1.5rem; font-weight: 800; color: #6aaa64; }
     .stat-label { font-size: 0.62rem; color: #a0a0a0; text-transform: uppercase; letter-spacing: 0.4px; }
 
-    /* Coriandoli */
+    /* ============================================
+       7. CORIANDOLI LENTI (4-5 secondi)
+       ============================================ */
     .confetti-container {
-        position: fixed; top: 0; left: 0;
+        position: fixed;
+        top: 0; left: 0;
         width: 100%; height: 100%;
-        pointer-events: none; z-index: 9999; overflow: hidden;
+        pointer-events: none;
+        z-index: 9999;
+        overflow: hidden;
     }
     .confetti-piece {
-        position: absolute; width: 10px; height: 10px;
-        opacity: 0; animation: confetti-fall linear forwards;
+        position: absolute;
+        width: 10px;
+        height: 14px;
+        opacity: 0;
+        top: -20px;
+        border-radius: 2px;
+        animation-name: confetti-fall;
+        animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        animation-iteration-count: 1;
+        animation-fill-mode: forwards;
     }
     @keyframes confetti-fall {
-        0%   { transform: translateY(-100px) rotate(0deg); opacity: 1; }
-        100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        0% {
+            transform: translateY(0) rotate(0deg) translateX(0);
+            opacity: 0;
+        }
+        10% {
+            opacity: 1;
+        }
+        50% {
+            transform: translateY(50vh) rotate(360deg) translateX(20px);
+        }
+        90% {
+            opacity: 1;
+        }
+        100% {
+            transform: translateY(110vh) rotate(900deg) translateX(-20px);
+            opacity: 0;
+        }
     }
 
-    /* Nasconde menu Streamlit */
-    #MainMenu {visibility: hidden;}
+    /* Nasconde menu Streamlit in fondo */
     footer {visibility: hidden;}
-    header {visibility: hidden;}
 
     /* ============================================
-       RESPONSIVE — SCHERMI MOLTO STRETTI
+       8. RESPONSIVE
        ============================================ */
     @media (max-width: 380px) {
         .grid-cell { width: 54px; height: 54px; font-size: 26px; }
         .grid-row { gap: 4px; margin-bottom: 4px; }
-        .header-title { font-size: 1rem; }
-        .header-player { font-size: 0.72rem; padding: 2px 8px; }
+        .top-title { font-size: 1.2rem; }
         .stTextInput input { height: 50px !important; letter-spacing: 3px; }
         .btn-invia > button { min-height: 50px !important; }
     }
 
-    /* Schermi bassi (iPhone SE in landscape, ecc.) */
     @media (max-height: 700px) {
         .grid-cell { width: 52px; height: 52px; font-size: 24px; }
         .grid-row { margin-bottom: 4px; }
+        .top-title { font-size: 1.2rem; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -592,39 +639,40 @@ def usa_suggerimento():
     st.toast(f"💡 Posizione {pos+1}: **{lettera}**", icon="💡")
 
 # =========================================================
-# HEADER COMPATTO
+# SIDEBAR
 # =========================================================
-def render_header_compact():
-    utente = st.session_state.utente or ""
-    nome_vis = utente if len(utente) <= 10 else utente[:9] + "…"
+def render_sidebar():
+    """Sidebar con profilo, cambia giocatore, menu e azioni admin."""
+    with st.sidebar:
+        utente = st.session_state.utente or "—"
+        st.markdown(f'<div class="sidebar-title">🟩 {APP_NAME}</div>', unsafe_allow_html=True)
 
-    # Riga 1: titolo + pillola giocatore
-    st.markdown(f"""
-        <div class="header-row">
-            <div class="header-title">🟩 {APP_NAME}</div>
-            <div class="header-player">
-                <span class="player-name">👤 {nome_vis}</span>
+        # Card giocatore
+        nome_vis = utente if len(utente) <= 14 else utente[:13] + "…"
+        st.markdown(f"""
+            <div class="sidebar-player">
+                <div class="label">Giocatore</div>
+                <div class="name">👤 {nome_vis}</div>
             </div>
-        </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    # Riga 2: 3 bottoni mini
-    st.markdown('<div class="header-btns">', unsafe_allow_html=True)
-    c1, c2, c3 = st.columns(3, gap="small")
-    with c1:
-        if st.button("⚙️ Profilo", use_container_width=True, key="hdr_edit"):
+        # Sezione profilo
+        st.markdown('<div class="sidebar-section">Profilo</div>', unsafe_allow_html=True)
+        if st.button("✏️ Modifica Nickname", use_container_width=True, key="sb_edit_nick"):
             st.session_state.modifica_nick = True
+            st.session_state.pagina = "profilo"
             st.rerun()
-    with c2:
-        if st.button("🔄 Cambia", use_container_width=True, key="hdr_change"):
+        if st.button("🔄 Cambia Giocatore", use_container_width=True, key="sb_change"):
             for k in ["utente","modalita","soluzione","tentativi","corrente",
                       "finita","vinto","punteggio_assegnato",
                       "modifica_nick","suggerimento_usato","suggerimento_pos",
-                      "mostra_definizione","nuovi_badges"]:
+                      "mostra_definizione","nuovi_badges","pagina"]:
                 st.session_state.pop(k, None)
             st.rerun()
-    with c3:
-        if st.button("🏠 Menu", use_container_width=True, key="hdr_menu"):
+
+        # Sezione navigazione
+        st.markdown('<div class="sidebar-section">Navigazione</div>', unsafe_allow_html=True)
+        if st.button("🏠 Menu principale", use_container_width=True, key="sb_menu"):
             st.session_state.pagina = "menu"
             for k in ["modalita","soluzione","tentativi","corrente",
                       "finita","vinto","punteggio_assegnato",
@@ -632,7 +680,23 @@ def render_header_compact():
                       "nuovi_badges"]:
                 st.session_state.pop(k, None)
             st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+        if st.button("🏆 Classifica", use_container_width=True, key="sb_leader"):
+            st.session_state.pagina = "classifica"
+            st.rerun()
+        if st.button("📊 Statistiche", use_container_width=True, key="sb_stats"):
+            st.session_state.pagina = "statistiche"
+            st.rerun()
+
+        # Zona admin
+        st.markdown('<div class="sidebar-section">Admin</div>', unsafe_allow_html=True)
+        with st.expander("⚠️ Zona Admin"):
+            st.caption("Azione irreversibile.")
+            conf = st.text_input("Scrivi RESET", key="sb_reset_confirm")
+            if st.button("🗑️ Cancella tutto", use_container_width=True, key="sb_reset"):
+                if conf.strip().upper() == "RESET":
+                    reset_tutto()
+                else:
+                    st.error("Scrivi RESET per confermare.")
 
 # =========================================================
 # GRIGLIA
@@ -694,30 +758,39 @@ def render_classifica():
         </div>
         """, unsafe_allow_html=True)
 
-def render_coriandoli():
-    colori = ["#6aaa64", "#c9b458", "#ffffff", "#e74c3c", "#3498db", "#f39c12"]
+def render_coriandoli_lenti():
+    """Coriandoli con caduta dolce di 4-5 secondi, senza st.balloons()."""
+    colori = ["#6aaa64", "#c9b458", "#ffffff", "#e74c3c", "#3498db", "#f39c12",
+              "#9b59b6", "#1abc9c", "#e67e22"]
     pezzi = []
-    for _ in range(40):
+    for _ in range(60):
         colore = random.choice(colori)
         left = random.randint(0, 100)
-        delay = round(random.uniform(0, 1.5), 2)
-        durata = round(random.uniform(2.5, 4.5), 2)
+        delay = round(random.uniform(0, 1.8), 2)
+        durata = round(random.uniform(4.0, 5.5), 2)
+        width = random.randint(8, 14)
+        height = random.randint(10, 18)
         pezzi.append(
-            f'<div class="confetti-piece" style="left:{left}%; background:{colore}; '
-            f'animation-delay:{delay}s; animation-duration:{durata}s; '
-            f'width:{random.randint(8,14)}px; height:{random.randint(8,14)}px;"></div>'
+            f'<div class="confetti-piece" style="'
+            f'left:{left}%; '
+            f'background:{colore}; '
+            f'animation-delay:{delay}s; '
+            f'animation-duration:{durata}s; '
+            f'width:{width}px; '
+            f'height:{height}px;'
+            f'"></div>'
         )
-    st.markdown('<div class="confetti-container">' + "".join(pezzi) + '</div>',
-                unsafe_allow_html=True)
+    st.markdown(
+        '<div class="confetti-container">' + "".join(pezzi) + '</div>',
+        unsafe_allow_html=True
+    )
 
 # =========================================================
 # SCHERMATA 1: SELEZIONE
 # =========================================================
 def pagina_selezione():
-    st.markdown(f'<div style="text-align:center;font-size:1.6rem;font-weight:800;color:#fff;margin:1rem 0 0.3rem 0;">🟩 {APP_NAME}</div>',
-                unsafe_allow_html=True)
-    st.markdown('<div style="text-align:center;color:#a0a0a0;font-size:0.9rem;margin-bottom:1.2rem;">Chi sta giocando?</div>',
-                unsafe_allow_html=True)
+    st.markdown(f'<div class="top-title">🟩 {APP_NAME}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="mode-label">Chi sta giocando?</div>', unsafe_allow_html=True)
 
     d = st.session_state.dati
     profili_esistenti = list(d["utenti"].keys())
@@ -775,23 +848,12 @@ def pagina_selezione():
                 st.session_state.utente = nome_finale
                 st.rerun()
 
-    with st.expander("⚙️ Zona Admin"):
-        st.caption("⚠️ Cancella tutti i dati (irreversibile).")
-        conferma = st.text_input("Scrivi RESET per confermare", key="reset_confirm")
-        if st.button("🗑️ Cancella tutto", use_container_width=True, key="btn_reset_all"):
-            if conferma.strip().upper() == "RESET":
-                reset_tutto()
-            else:
-                st.error("Scrivi RESET per confermare.")
-
 # =========================================================
 # SCHERMATA 2: MENU
 # =========================================================
 def pagina_menu():
-    render_header_compact()
-    st.markdown('<div style="height:0.4rem;"></div>', unsafe_allow_html=True)
-    st.markdown('<div style="text-align:center;color:#fff;font-size:1.05rem;font-weight:700;margin:0.4rem 0;">Scegli la modalità</div>',
-                unsafe_allow_html=True)
+    st.markdown(f'<div class="top-title">🟩 {APP_NAME}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="mode-label">Scegli la modalità</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="mode-btn">', unsafe_allow_html=True)
     if st.button("📅 Parola del Giorno", use_container_width=True, key="m_daily"):
@@ -816,14 +878,13 @@ def pagina_menu():
             st.rerun()
 
 # =========================================================
-# SCHERMATA 3: GIOCO (SNELLA)
+# SCHERMATA 3: GIOCO (PULITA, SENZA SIDEBAR CHIUSA DI DEFAULT)
 # =========================================================
 def pagina_gioco():
-    render_header_compact()
-
     titolo_mod = "📅 Parola del Giorno" if st.session_state.modalita == "daily" else "🎲 Illimitato"
-    st.markdown(f'<div style="text-align:center;color:#a0a0a0;font-size:0.8rem;margin:0.2rem 0 0.3rem 0;">{titolo_mod}</div>',
-                unsafe_allow_html=True)
+
+    st.markdown(f'<div class="top-title">🟩 {APP_NAME}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="mode-label">{titolo_mod}</div>', unsafe_allow_html=True)
 
     render_griglia()
 
@@ -839,8 +900,7 @@ def pagina_gioco():
                                                   st.session_state.modalita, n)
                 st.session_state.punteggio_assegnato = True
                 st.session_state.nuovi_badges = nuovi_badges
-                st.balloons()
-                render_coriandoli()
+                render_coriandoli_lenti()
             render_nuovi_badges(st.session_state.get("nuovi_badges", []))
             st.success(f"🎉 Bravissimo! In {n} tentativi — **+{punti} punti!**")
 
@@ -903,7 +963,7 @@ def pagina_gioco():
         return
 
     # ============================================
-    # INPUT + INVIO (grandi, in basso)
+    # INPUT + INVIO
     # ============================================
     col_input, col_invia = st.columns([4, 1], gap="small")
     with col_input:
@@ -923,17 +983,17 @@ def pagina_gioco():
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Suggerimento + contatore tentativi (riga compatta)
+    # Suggerimento + contatore
     col_hint, col_count = st.columns([3, 1], gap="small")
     with col_hint:
         if not st.session_state.suggerimento_usato:
             st.markdown('<div class="hint-btn">', unsafe_allow_html=True)
-            if st.button("💡 Suggerimento (1 volta)", use_container_width=True, key="hint_btn"):
+            if st.button("💡 Suggerimento", use_container_width=True, key="hint_btn"):
                 usa_suggerimento()
                 st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         else:
-            st.markdown('<div style="text-align:center;color:#c9b458;font-size:0.75rem;padding:0.6rem 0;">💡 Suggerimento usato</div>',
+            st.markdown('<div style="text-align:center;color:#c9b458;font-size:0.75rem;padding:0.6rem 0;">💡 usato</div>',
                         unsafe_allow_html=True)
     with col_count:
         st.markdown(f'<div style="text-align:center;color:#a0a0a0;font-size:0.75rem;padding:0.6rem 0;">{len(st.session_state.tentativi)}/{MAX_TRIES}</div>',
@@ -943,9 +1003,7 @@ def pagina_gioco():
 # SCHERMATA 4: CLASSIFICA
 # =========================================================
 def pagina_classifica():
-    render_header_compact()
-    st.markdown('<div style="text-align:center;color:#fff;font-size:1.05rem;font-weight:700;margin:0.4rem 0;">🏆 Classifica</div>',
-                unsafe_allow_html=True)
+    st.markdown(f'<div class="top-title">🏆 Classifica</div>', unsafe_allow_html=True)
     st.markdown('<div class="live-label"><span class="live-dot"></span>Auto-aggiornamento 30s</div>',
                 unsafe_allow_html=True)
     render_classifica()
@@ -957,10 +1015,8 @@ def pagina_classifica():
 # SCHERMATA 5: STATISTICHE
 # =========================================================
 def pagina_statistiche():
-    render_header_compact()
     utente = st.session_state.utente
-    st.markdown(f'<div style="text-align:center;color:#fff;font-size:1.05rem;font-weight:700;margin:0.4rem 0;">📊 {utente}</div>',
-                unsafe_allow_html=True)
+    st.markdown(f'<div class="top-title">📊 {utente}</div>', unsafe_allow_html=True)
 
     d = st.session_state.dati
     u = d["utenti"].get(utente)
@@ -1019,9 +1075,7 @@ def pagina_statistiche():
 # SCHERMATA 6: MODIFICA NICKNAME
 # =========================================================
 def pagina_modifica_nick():
-    render_header_compact()
-    st.markdown('<div style="text-align:center;color:#fff;font-size:1.05rem;font-weight:700;margin:0.4rem 0;">✏️ Modifica Nickname</div>',
-                unsafe_allow_html=True)
+    st.markdown('<div class="top-title">✏️ Modifica Nickname</div>', unsafe_allow_html=True)
     st.markdown(f'<p style="text-align:center;color:#a0a0a0;font-size:0.85rem;">Attuale: <b style="color:#fff;">'
                 f'{st.session_state.utente}</b></p>', unsafe_allow_html=True)
 
@@ -1072,6 +1126,11 @@ if st.session_state.utente and st.session_state.pagina in PAGINE_CON_REFRESH:
     st_autorefresh(interval=REFRESH_MS, key="auto_refresh")
     st.session_state.dati = carica_dati()
 
+# Sidebar visibile solo quando l'utente è loggato
+if st.session_state.utente:
+    render_sidebar()
+
+# Rendering
 if not st.session_state.utente:
     pagina_selezione()
 elif st.session_state.modifica_nick:

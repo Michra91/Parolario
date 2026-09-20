@@ -1,7 +1,7 @@
 # app.py
 """
 Parolario — Wordle in famiglia (2-3 giocatori)
-Layout Mobile-First: sidebar per gestione, schermo pulito per il gioco.
+Layout Mobile-First con palloncini lenti alla vittoria.
 """
 
 import streamlit as st
@@ -21,78 +21,80 @@ st.set_page_config(
     page_title=APP_NAME,
     page_icon="🟩",
     layout="centered",
-    initial_sidebar_state="collapsed",  # <-- collassata di default
+    initial_sidebar_state="collapsed",
 )
 
 # =========================================================
-# CSS PERSONALIZZATO — MOBILE-FIRST DEFINITIVO
+# CSS PERSONALIZZATO
 # =========================================================
 st.markdown("""
 <style>
     /* ============================================
-       1. PADDING TOP ZERO — NIENTE SPAZIO VUOTO
+       CONTAINER — PADDING MINIMO, MAX 420px
        ============================================ */
     .main .block-container {
-        padding-top: 0.5rem !important;
-        padding-bottom: 1rem !important;
-        padding-left: 0.6rem !important;
-        padding-right: 0.6rem !important;
+        padding-top: 0.3rem !important;
+        padding-bottom: 0.3rem !important;
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
         max-width: 420px !important;
         margin: auto !important;
     }
     header[data-testid="stHeader"] {
-        display: none !important;  /* Nasconde l'header trasparente */
+        display: none !important;
     }
     .stApp { background-color: #121213; }
 
-    /* Azzera gap verticali tra elementi Streamlit */
-    div[data-testid="stVerticalBlock"] > div { gap: 0.2rem !important; }
+    /* Azzera gap tra elementi */
+    div[data-testid="stVerticalBlock"] > div { gap: 0.15rem !important; }
     .element-container { margin-bottom: 0 !important; }
     div[data-testid="column"] { padding: 0 !important; }
 
     /* ============================================
-       2. TITOLO COMPATTO (1 RIGA SOLA)
+       TITOLO COMPATTO
        ============================================ */
     .top-title {
         text-align: center;
-        font-size: 1.4rem;
+        font-size: 1.25rem;
         font-weight: 800;
         color: #ffffff;
-        letter-spacing: 0.5px;
-        margin: 0 0 0.4rem 0;
+        letter-spacing: 0.4px;
+        margin: 0 0 0.15rem 0;
         padding: 0;
+        line-height: 1.2;
     }
     .mode-label {
         text-align: center;
         color: #a0a0a0;
-        font-size: 0.8rem;
-        margin: 0 0 0.4rem 0;
+        font-size: 0.72rem;
+        margin: 0 0 0.25rem 0;
+        line-height: 1.1;
     }
 
     /* ============================================
-       3. GRIGLIA — GRANDE, CENTRATA, SENZA SCROLL
+       GRIGLIA — COMPATTA, NIENTE SCROLL
        ============================================ */
     .grid-wrapper {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        margin: 0.3rem auto;
+        margin: 0.15rem auto;
         width: 100%;
     }
     .grid-row {
         display: flex;
-        gap: 5px;
+        gap: 4px;
         justify-content: center;
-        margin-bottom: 5px;
+        margin-bottom: 4px;
     }
     .grid-cell {
-        width: 62px;
-        height: 62px;
+        width: 56px;
+        height: 56px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 30px;
+        font-size: 28px;
         font-weight: 800;
         border: 2px solid #3a3a3c;
         border-radius: 6px;
@@ -100,6 +102,7 @@ st.markdown("""
         color: #ffffff;
         background: #121213;
         transition: all 0.15s ease;
+        line-height: 1;
     }
     .grid-cell.filled  { border-color: #565758; }
     .grid-cell.correct { background: #6aaa64; border-color: #6aaa64; }
@@ -113,42 +116,45 @@ st.markdown("""
     }
 
     /* ============================================
-       4. INPUT + PULSANTE INVIO
+       INPUT + PULSANTE INVIO
        ============================================ */
     .stTextInput input {
-        font-size: 1.35rem !important;
+        font-size: 1.3rem !important;
         font-weight: 700 !important;
-        padding: 0.7rem 0.8rem !important;
+        padding: 0.5rem 0.7rem !important;
         text-transform: uppercase;
         text-align: center;
-        letter-spacing: 4px;
+        letter-spacing: 3px;
         background: #1a1a1b !important;
         color: #fff !important;
         border: 2px solid #3a3a3c !important;
         border-radius: 10px !important;
-        height: 54px !important;
+        height: 50px !important;
+        line-height: 1 !important;
     }
     .stTextInput input::placeholder {
         color: #555 !important;
         text-transform: none;
         letter-spacing: normal;
         font-weight: 400;
-        font-size: 0.95rem;
+        font-size: 0.9rem;
     }
     .stTextInput input:focus {
         border-color: #6aaa64 !important;
         box-shadow: 0 0 0 2px rgba(106,170,100,0.3) !important;
     }
 
-    /* Bottone "Invia" */
+    /* Bottone Invia grande e verde */
     .btn-invia > button {
         background: #6aaa64 !important;
         border-color: #6aaa64 !important;
         color: #ffffff !important;
-        min-height: 54px !important;
-        font-size: 1.6rem !important;
+        min-height: 50px !important;
+        height: 50px !important;
+        font-size: 1.5rem !important;
         border-radius: 10px !important;
         font-weight: 800 !important;
+        padding: 0 !important;
     }
     .btn-invia > button:hover { background: #7abb74 !important; }
     .btn-invia > button:active { transform: scale(0.95); }
@@ -158,9 +164,10 @@ st.markdown("""
         background: #2a2a1b !important;
         border: 1px solid #c9b458 !important;
         color: #c9b458 !important;
-        min-height: 40px !important;
-        font-size: 0.85rem !important;
+        min-height: 38px !important;
+        font-size: 0.82rem !important;
         border-radius: 8px !important;
+        padding: 0.3rem 0.5rem !important;
     }
     .hint-btn > button:hover { background: #3a3a2b !important; }
 
@@ -182,13 +189,13 @@ st.markdown("""
 
     /* Bottoni modalità */
     .mode-btn > button {
-        min-height: 56px !important;
+        min-height: 54px !important;
         font-size: 1rem !important;
         border-radius: 12px !important;
     }
 
     /* ============================================
-       5. SIDEBAR
+       SIDEBAR
        ============================================ */
     section[data-testid="stSidebar"] {
         background: #0e0e10 !important;
@@ -222,19 +229,19 @@ st.markdown("""
     }
     .sidebar-player .label {
         color: #a0a0a0;
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
     .sidebar-player .name {
         color: #ffffff;
-        font-size: 1.1rem;
+        font-size: 1.05rem;
         font-weight: 700;
         margin-top: 2px;
     }
     .sidebar-section {
         color: #a0a0a0;
-        font-size: 0.72rem;
+        font-size: 0.7rem;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         margin: 1rem 0 0.4rem 0;
@@ -242,7 +249,7 @@ st.markdown("""
     }
 
     /* ============================================
-       6. ALTRI COMPONENTI
+       ALTRI COMPONENTI
        ============================================ */
     .stAlert {
         background: #1a1a1b !important;
@@ -302,66 +309,118 @@ st.markdown("""
     .stat-label { font-size: 0.62rem; color: #a0a0a0; text-transform: uppercase; letter-spacing: 0.4px; }
 
     /* ============================================
-       7. CORIANDOLI LENTI (4-5 secondi)
+       PALLONCINI LENTI (5-6 secondi)
        ============================================ */
-    .confetti-container {
+    .balloons-container {
         position: fixed;
-        top: 0; left: 0;
-        width: 100%; height: 100%;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
         pointer-events: none;
         z-index: 9999;
         overflow: hidden;
     }
-    .confetti-piece {
+    .balloon {
         position: absolute;
-        width: 10px;
-        height: 14px;
+        bottom: -150px;
+        width: 50px;
+        height: 65px;
+        border-radius: 50% 50% 50% 50% / 55% 55% 45% 45%;
         opacity: 0;
-        top: -20px;
-        border-radius: 2px;
-        animation-name: confetti-fall;
-        animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        animation-name: balloon-rise;
+        animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
         animation-iteration-count: 1;
         animation-fill-mode: forwards;
     }
-    @keyframes confetti-fall {
+    /* Nodino del palloncino (triangolino alla base) */
+    .balloon::after {
+        content: "";
+        position: absolute;
+        bottom: -6px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 8px solid currentColor;
+        opacity: 0.85;
+    }
+    /* Filo del palloncino */
+    .balloon::before {
+        content: "";
+        position: absolute;
+        bottom: -30px;
+        left: 50%;
+        width: 1px;
+        height: 30px;
+        background: rgba(255,255,255,0.35);
+        transform: translateX(-50%);
+    }
+    /* Riflesso lucido sul palloncino */
+    .balloon .shine {
+        position: absolute;
+        top: 12%;
+        left: 22%;
+        width: 30%;
+        height: 22%;
+        background: rgba(255,255,255,0.5);
+        border-radius: 50%;
+        filter: blur(3px);
+    }
+
+    @keyframes balloon-rise {
         0% {
-            transform: translateY(0) rotate(0deg) translateX(0);
+            transform: translateY(0) translateX(0) rotate(0deg);
             opacity: 0;
         }
-        10% {
+        8% {
             opacity: 1;
         }
-        50% {
-            transform: translateY(50vh) rotate(360deg) translateX(20px);
+        25% {
+            transform: translateY(-25vh) translateX(15px) rotate(-4deg);
         }
-        90% {
+        50% {
+            transform: translateY(-50vh) translateX(-15px) rotate(4deg);
+        }
+        75% {
+            transform: translateY(-75vh) translateX(15px) rotate(-3deg);
             opacity: 1;
         }
         100% {
-            transform: translateY(110vh) rotate(900deg) translateX(-20px);
+            transform: translateY(-110vh) translateX(-10px) rotate(3deg);
             opacity: 0;
         }
     }
 
-    /* Nasconde menu Streamlit in fondo */
     footer {visibility: hidden;}
 
     /* ============================================
-       8. RESPONSIVE
+       RESPONSIVE — SCHERMI STRETTI E BASSI
        ============================================ */
     @media (max-width: 380px) {
-        .grid-cell { width: 54px; height: 54px; font-size: 26px; }
-        .grid-row { gap: 4px; margin-bottom: 4px; }
-        .top-title { font-size: 1.2rem; }
-        .stTextInput input { height: 50px !important; letter-spacing: 3px; }
-        .btn-invia > button { min-height: 50px !important; }
+        .grid-cell { width: 50px; height: 50px; font-size: 24px; }
+        .grid-row { gap: 3px; margin-bottom: 3px; }
+        .top-title { font-size: 1.1rem; }
+        .stTextInput input { height: 46px !important; letter-spacing: 2px; }
+        .btn-invia > button { min-height: 46px !important; height: 46px !important; }
     }
 
-    @media (max-height: 700px) {
-        .grid-cell { width: 52px; height: 52px; font-size: 24px; }
-        .grid-row { margin-bottom: 4px; }
-        .top-title { font-size: 1.2rem; }
+    /* Schermi bassi: comprimi ulteriormente per far stare tutto */
+    @media (max-height: 720px) {
+        .grid-cell { width: 50px; height: 50px; font-size: 24px; }
+        .grid-row { margin-bottom: 3px; }
+        .top-title { font-size: 1.15rem; margin-bottom: 0.1rem; }
+        .mode-label { font-size: 0.68rem; margin-bottom: 0.15rem; }
+        .stTextInput input { height: 46px !important; }
+        .btn-invia > button { min-height: 46px !important; height: 46px !important; }
+    }
+
+    @media (max-height: 640px) {
+        .grid-cell { width: 46px; height: 46px; font-size: 22px; }
+        .grid-row { gap: 3px; margin-bottom: 3px; }
+        .top-title { font-size: 1rem; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -528,6 +587,8 @@ def reset_partita(mod: str):
     st.session_state.suggerimento_pos = None
     st.session_state.mostra_definizione = False
     st.session_state.nuovi_badges = []
+    # Reset input testo
+    st.session_state.input_parola = ""
 
 # =========================================================
 # BADGE
@@ -604,7 +665,10 @@ def registra_sconfitta(utente: str, modalita: str):
 # AZIONI
 # =========================================================
 def invia_tentativo(parola_input: str = None):
-    parola = (parola_input or st.session_state.corrente).upper().strip()
+    parola = (parola_input or "").upper().strip()
+    # Reset input SEMPRE (anche se parola non valida)
+    st.session_state.input_parola = ""
+
     if len(parola) != WORD_LEN:
         st.toast("La parola deve avere 5 lettere!", icon="⚠️")
         return
@@ -613,7 +677,6 @@ def invia_tentativo(parola_input: str = None):
         return
     fb = calcola_feedback(parola, st.session_state.soluzione)
     st.session_state.tentativi.append((parola, fb))
-    st.session_state.corrente = ""
     if parola == st.session_state.soluzione:
         st.session_state.finita = True
         st.session_state.vinto = True
@@ -642,12 +705,10 @@ def usa_suggerimento():
 # SIDEBAR
 # =========================================================
 def render_sidebar():
-    """Sidebar con profilo, cambia giocatore, menu e azioni admin."""
     with st.sidebar:
         utente = st.session_state.utente or "—"
         st.markdown(f'<div class="sidebar-title">🟩 {APP_NAME}</div>', unsafe_allow_html=True)
 
-        # Card giocatore
         nome_vis = utente if len(utente) <= 14 else utente[:13] + "…"
         st.markdown(f"""
             <div class="sidebar-player">
@@ -656,7 +717,6 @@ def render_sidebar():
             </div>
         """, unsafe_allow_html=True)
 
-        # Sezione profilo
         st.markdown('<div class="sidebar-section">Profilo</div>', unsafe_allow_html=True)
         if st.button("✏️ Modifica Nickname", use_container_width=True, key="sb_edit_nick"):
             st.session_state.modifica_nick = True
@@ -666,11 +726,10 @@ def render_sidebar():
             for k in ["utente","modalita","soluzione","tentativi","corrente",
                       "finita","vinto","punteggio_assegnato",
                       "modifica_nick","suggerimento_usato","suggerimento_pos",
-                      "mostra_definizione","nuovi_badges","pagina"]:
+                      "mostra_definizione","nuovi_badges","pagina","input_parola"]:
                 st.session_state.pop(k, None)
             st.rerun()
 
-        # Sezione navigazione
         st.markdown('<div class="sidebar-section">Navigazione</div>', unsafe_allow_html=True)
         if st.button("🏠 Menu principale", use_container_width=True, key="sb_menu"):
             st.session_state.pagina = "menu"
@@ -687,7 +746,6 @@ def render_sidebar():
             st.session_state.pagina = "statistiche"
             st.rerun()
 
-        # Zona admin
         st.markdown('<div class="sidebar-section">Admin</div>', unsafe_allow_html=True)
         with st.expander("⚠️ Zona Admin"):
             st.caption("Azione irreversibile.")
@@ -711,12 +769,13 @@ def render_griglia():
             for lettera, colore in zip(parola, fb):
                 celle.append(f'<div class="grid-cell {colore}">{lettera}</div>')
         elif r == len(st.session_state.tentativi) and not st.session_state.finita:
+            corrente = st.session_state.get("input_parola", "").upper() or st.session_state.corrente
             for i in range(WORD_LEN):
-                if i < len(st.session_state.corrente):
+                if i < len(corrente):
                     classe = "filled"
                     if sugg_pos is not None and i == sugg_pos:
                         classe = "hint"
-                    celle.append(f'<div class="grid-cell {classe}">{st.session_state.corrente[i]}</div>')
+                    celle.append(f'<div class="grid-cell {classe}">{corrente[i]}</div>')
                 elif sugg_pos is not None and i == sugg_pos:
                     lettera_hint = st.session_state.soluzione[i].upper()
                     celle.append(f'<div class="grid-cell hint">{lettera_hint}</div>')
@@ -758,30 +817,42 @@ def render_classifica():
         </div>
         """, unsafe_allow_html=True)
 
-def render_coriandoli_lenti():
-    """Coriandoli con caduta dolce di 4-5 secondi, senza st.balloons()."""
-    colori = ["#6aaa64", "#c9b458", "#ffffff", "#e74c3c", "#3498db", "#f39c12",
-              "#9b59b6", "#1abc9c", "#e67e22"]
-    pezzi = []
-    for _ in range(60):
+def render_palloncini():
+    """Palloncini che salgono lentamente (5-6s), morbidi e rilassanti."""
+    colori = [
+        "#6aaa64",  # verde wordle
+        "#c9b458",  # giallo wordle
+        "#e74c3c",  # rosso
+        "#3498db",  # blu
+        "#f39c12",  # arancione
+        "#9b59b6",  # viola
+        "#1abc9c",  # teal
+        "#e91e63",  # rosa
+        "#ff5722",  # corallo
+    ]
+    palloncini = []
+    for _ in range(18):
         colore = random.choice(colori)
-        left = random.randint(0, 100)
-        delay = round(random.uniform(0, 1.8), 2)
-        durata = round(random.uniform(4.0, 5.5), 2)
-        width = random.randint(8, 14)
-        height = random.randint(10, 18)
-        pezzi.append(
-            f'<div class="confetti-piece" style="'
+        left = random.randint(5, 90)  # percentuale
+        delay = round(random.uniform(0, 2.0), 2)
+        durata = round(random.uniform(5.0, 6.5), 2)
+        width = random.randint(38, 58)
+        height = int(width * 1.3)
+        palloncini.append(
+            f'<div class="balloon" style="'
             f'left:{left}%; '
-            f'background:{colore}; '
-            f'animation-delay:{delay}s; '
-            f'animation-duration:{durata}s; '
             f'width:{width}px; '
-            f'height:{height}px;'
-            f'"></div>'
+            f'height:{height}px; '
+            f'color:{colore}; '
+            f'background:radial-gradient(circle at 35% 30%, {colore}, {colore}dd 60%, {colore}aa); '
+            f'animation-delay:{delay}s; '
+            f'animation-duration:{durata}s;'
+            f'">'
+            f'<div class="shine"></div>'
+            f'</div>'
         )
     st.markdown(
-        '<div class="confetti-container">' + "".join(pezzi) + '</div>',
+        '<div class="balloons-container">' + "".join(palloncini) + '</div>',
         unsafe_allow_html=True
     )
 
@@ -878,7 +949,7 @@ def pagina_menu():
             st.rerun()
 
 # =========================================================
-# SCHERMATA 3: GIOCO (PULITA, SENZA SIDEBAR CHIUSA DI DEFAULT)
+# SCHERMATA 3: GIOCO
 # =========================================================
 def pagina_gioco():
     titolo_mod = "📅 Parola del Giorno" if st.session_state.modalita == "daily" else "🎲 Illimitato"
@@ -900,7 +971,7 @@ def pagina_gioco():
                                                   st.session_state.modalita, n)
                 st.session_state.punteggio_assegnato = True
                 st.session_state.nuovi_badges = nuovi_badges
-                render_coriandoli_lenti()
+                render_palloncini()  # <-- Palloncini lenti
             render_nuovi_badges(st.session_state.get("nuovi_badges", []))
             st.success(f"🎉 Bravissimo! In {n} tentativi — **+{punti} punti!**")
 
@@ -965,13 +1036,17 @@ def pagina_gioco():
     # ============================================
     # INPUT + INVIO
     # ============================================
+    # Garantisce che la chiave di stato esista
+    if "input_parola" not in st.session_state:
+        st.session_state.input_parola = ""
+
     col_input, col_invia = st.columns([4, 1], gap="small")
     with col_input:
         testo = st.text_input(
             "Parola",
-            value="",
+            value=st.session_state.input_parola,
             max_chars=WORD_LEN,
-            key="input_fisico",
+            key="input_parola",
             label_visibility="collapsed",
             placeholder="Scrivi la parola…",
             autocomplete="off",
@@ -983,6 +1058,12 @@ def pagina_gioco():
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
+    # NOTA: L'invio con il tasto "Invio" della tastiera del telefono
+    # non è direttamente intercettabile in Streamlit.
+    # Il campo si svuota automaticamente quando l'utente preme il bottone ✔️.
+    # Se l'utente preme Invio, Streamlit ricarica l'input dal session_state,
+    # quindi il valore rimane finché non preme ✔️ o scrive altro.
+
     # Suggerimento + contatore
     col_hint, col_count = st.columns([3, 1], gap="small")
     with col_hint:
@@ -993,10 +1074,10 @@ def pagina_gioco():
                 st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
         else:
-            st.markdown('<div style="text-align:center;color:#c9b458;font-size:0.75rem;padding:0.6rem 0;">💡 usato</div>',
+            st.markdown('<div style="text-align:center;color:#c9b458;font-size:0.75rem;padding:0.5rem 0;">💡 usato</div>',
                         unsafe_allow_html=True)
     with col_count:
-        st.markdown(f'<div style="text-align:center;color:#a0a0a0;font-size:0.75rem;padding:0.6rem 0;">{len(st.session_state.tentativi)}/{MAX_TRIES}</div>',
+        st.markdown(f'<div style="text-align:center;color:#a0a0a0;font-size:0.75rem;padding:0.5rem 0;">{len(st.session_state.tentativi)}/{MAX_TRIES}</div>',
                     unsafe_allow_html=True)
 
 # =========================================================
@@ -1118,6 +1199,7 @@ defaults = {
     "mostra_definizione": False,
     "nuovi_badges": [],
     "conferma_elimina": None,
+    "input_parola": "",
 }
 for k, v in defaults.items():
     st.session_state.setdefault(k, v)
@@ -1126,11 +1208,9 @@ if st.session_state.utente and st.session_state.pagina in PAGINE_CON_REFRESH:
     st_autorefresh(interval=REFRESH_MS, key="auto_refresh")
     st.session_state.dati = carica_dati()
 
-# Sidebar visibile solo quando l'utente è loggato
 if st.session_state.utente:
     render_sidebar()
 
-# Rendering
 if not st.session_state.utente:
     pagina_selezione()
 elif st.session_state.modifica_nick:

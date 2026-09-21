@@ -327,11 +327,16 @@ def leggi_partite() -> pd.DataFrame:
 
 def hash_pin(pin: str) -> str:
     """Hash sicuro del PIN (SHA-256)."""
-    return hashlib.sha256(pin.encode("utf-8")).hexdigest()
+    return hashlib.sha256(str(pin).strip().encode("utf-8")).hexdigest()
 
 def verifica_pin(pin: str, pin_hash: str) -> bool:
     """Verifica il PIN confrontando gli hash in modo sicuro."""
-    return hmac.compare_digest(hash_pin(pin), pin_hash)
+    hash_calcolato = hash_pin(pin)
+    pin_hash = str(pin_hash).strip()
+    return hmac.compare_digest(
+        hash_calcolato.encode("utf-8"),
+        pin_hash.encode("utf-8")
+    )
 
 def registra_utente(username: str, pin: str, ruolo: str = "User") -> bool:
     """Aggiunge un nuovo utente al foglio Utenti."""

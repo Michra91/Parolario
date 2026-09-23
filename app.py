@@ -1,7 +1,7 @@
 # app.py
 """
-Parolario v6 — Wordle in famiglia con autenticazione PIN, Admin panel,
-cache ottimizzata, layout mobile compatto e batch update su Google Sheets.
+Parolario v8 — Wordle in famiglia con bottom navigation bar
+e layout mobile moderno.
 """
 
 import streamlit as st
@@ -35,16 +35,19 @@ WORD_LEN = 5
 MAX_TRIES = 6
 REFRESH_MS = 30_000
 PAGINE_CON_REFRESH = {"classifica", "menu", "statistiche"}
-CACHE_TTL = 60  # secondi di cache per le letture Google Sheets
+CACHE_TTL = 60
 
 # =========================================================
 # CSS PERSONALIZZATO
 # =========================================================
 st.markdown("""
 <style>
+    /* ============================================
+       CONTAINER PRINCIPALE
+       ============================================ */
     .main .block-container {
-        padding-top: 0.2rem !important;
-        padding-bottom: 0.2rem !important;
+        padding-top: 0.5rem !important;
+        padding-bottom: 5.5rem !important;  /* spazio per bottom nav */
         padding-left: 0.5rem !important;
         padding-right: 0.5rem !important;
         max-width: 420px !important;
@@ -60,84 +63,49 @@ st.markdown("""
     div[data-testid="column"] { padding: 0 !important; }
 
     /* ============================================
-       TOP BAR COMPATTA (solo in gioco)
+       LOGO PAROLARIO CENTRATO
        ============================================ */
-    .compact-topbar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 6px;
-        padding: 4px 2px;
-        margin-bottom: 0.2rem;
-    }
-    .compact-topbar .topbar-title {
-        font-size: 1.05rem;
-        font-weight: 900;
-        letter-spacing: 3px;
-        background: linear-gradient(135deg, #6aaa64, #c9b458);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        text-align: center;
-        flex: 1;
-    }
-    .compact-topbar .topbar-avatar {
-        width: 34px; height: 34px;
-        border-radius: 50%;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 18px;
-        background: linear-gradient(135deg, #2a2a2c, #1a1a1b);
-        border: 2px solid #3a3a3c;
-        flex-shrink: 0;
-    }
-    .compact-topbar .topbar-avatar.admin {
-        border-color: #c9b458;
-        box-shadow: 0 0 10px rgba(201,180,88,0.3);
-    }
-
-    /* Header classico (login / menu) */
     .wordle-header {
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        padding: 6px 0 3px 0; margin-bottom: 0.2rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 12px 0 8px 0;
+        margin-bottom: 0.4rem;
     }
-    .wordle-tiles { display: flex; gap: 5px; margin-bottom: 5px; }
-    .wordle-tile {
-        width: 28px; height: 28px;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 14px; font-weight: 800;
-        border-radius: 6px; color: #fff;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        animation: tile-bounce 2s ease-in-out infinite;
-    }
-    .wordle-tile:nth-child(1) { animation-delay: 0s; }
-    .wordle-tile:nth-child(2) { animation-delay: 0.3s; }
-    .wordle-tile:nth-child(3) { animation-delay: 0.6s; }
-    .wordle-tile:nth-child(4) { animation-delay: 0.9s; }
-    .wordle-tile:nth-child(5) { animation-delay: 1.2s; }
-    @keyframes tile-bounce {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-3px); }
-    }
-    .tile-green  { background: linear-gradient(135deg, #6aaa64, #4d8a48); }
-    .tile-yellow { background: linear-gradient(135deg, #c9b458, #a89540); }
-    .tile-gray   { background: linear-gradient(135deg, #565758, #3a3a3c); }
     .wordle-title {
-        font-size: 1.4rem; font-weight: 900;
-        letter-spacing: 4px; color: #ffffff;
-        text-shadow: 0 0 20px rgba(106,170,100,0.4);
-        margin: 0; text-align: center;
+        font-size: 2rem;
+        font-weight: 800;
+        letter-spacing: 2px;
+        text-align: center;
+        margin: 0;
+        background: linear-gradient(135deg, #c9b458 0%, #6aaa64 50%, #c9b458 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        filter: drop-shadow(0 2px 8px rgba(201,180,88,0.3));
+        animation: title-glow 4s ease-in-out infinite;
+    }
+    @keyframes title-glow {
+        0%, 100% { filter: drop-shadow(0 2px 8px rgba(201,180,88,0.3)); }
+        50%      { filter: drop-shadow(0 2px 16px rgba(106,170,100,0.5)); }
     }
     .wordle-subtitle {
-        font-size: 0.68rem; color: #a0a0a0;
-        letter-spacing: 2px; text-transform: uppercase; margin-top: 2px;
+        font-size: 0.7rem;
+        color: #a0a0a0;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        margin-top: 4px;
+        text-align: center;
     }
 
     /* ============================================
-       GRIGLIA COMPATTA
+       GRIGLIA
        ============================================ */
     .grid-wrapper {
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
-        margin: 0.15rem auto; width: 100%;
+        margin: 0.3rem auto; width: 100%;
     }
     .grid-row {
         display: flex; gap: 4px;
@@ -234,57 +202,7 @@ st.markdown("""
     }
     .btn-invia > button:active { transform: translateY(1px) scale(0.98); }
 
-    .hint-btn > button {
-        background: linear-gradient(135deg, #3a3520, #2a2a1b) !important;
-        border: 2px solid #c9b458 !important;
-        color: #f0d97a !important;
-        min-height: 38px !important; font-size: 0.82rem !important;
-        font-weight: 700 !important; border-radius: 9px !important;
-        padding: 0.3rem 0.5rem !important;
-        box-shadow: 0 0 12px rgba(201,180,88,0.15) !important;
-        transition: all 0.2s ease !important;
-    }
-    .hint-btn > button:hover {
-        background: linear-gradient(135deg, #4a4525, #3a3a25) !important;
-        box-shadow: 0 0 20px rgba(201,180,88,0.35) !important;
-        color: #ffe680 !important;
-    }
-
-    /* Pulsante Menù */
-    .menu-btn > button {
-        background: linear-gradient(135deg, #2a2a2c, #1a1a1b) !important;
-        border: 1px solid #565758 !important;
-        color: #e8e8e8 !important;
-        min-height: 38px !important;
-        font-size: 0.82rem !important;
-        font-weight: 700 !important;
-        border-radius: 9px !important;
-        letter-spacing: 0.5px !important;
-        transition: all 0.15s ease !important;
-    }
-    .menu-btn > button:hover {
-        background: linear-gradient(135deg, #3a3a3c, #2a2a2c) !important;
-        border-color: #6aaa64 !important;
-        color: #ffffff !important;
-    }
-
-    /* Pulsante Menù mini (top bar) */
-    .menu-mini > button {
-        background: transparent !important;
-        border: 1px solid #3a3a3c !important;
-        color: #e8e8e8 !important;
-        min-height: 34px !important;
-        height: 34px !important;
-        font-size: 1rem !important;
-        padding: 0 !important;
-        border-radius: 8px !important;
-        transition: all 0.15s ease !important;
-    }
-    .menu-mini > button:hover {
-        border-color: #6aaa64 !important;
-        background: rgba(106,170,100,0.1) !important;
-    }
-
+    /* Pulsanti generici */
     .stButton > button {
         width: 100%; font-weight: 700 !important;
         background: #1a1a1b !important; color: #ffffff !important;
@@ -302,24 +220,112 @@ st.markdown("""
         border-radius: 12px !important;
     }
 
-    /* Tab */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 6px !important; background: transparent !important;
-        border-bottom: 2px solid #2a2a2c !important; padding: 0 !important;
+    /* ============================================
+       BOTTOM NAVIGATION BAR
+       ============================================ */
+    .bottom-nav {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        z-index: 9999;
+        background: rgba(18, 18, 19, 0.85);
+        backdrop-filter: blur(16px) saturate(180%);
+        -webkit-backdrop-filter: blur(16px) saturate(180%);
+        border-top: 1px solid rgba(58, 58, 60, 0.6);
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+        padding: 6px 0 8px 0;
     }
-    .stTabs [data-baseweb="tab"] {
-        height: 44px !important; background: transparent !important;
-        border-radius: 0 !important; padding: 0 14px !important;
-        color: #888 !important; font-weight: 700 !important;
-        font-size: 0.9rem !important;
-        border-bottom: 3px solid transparent !important;
+    /* Layout interno della nav */
+    .bottom-nav .nav-grid {
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        max-width: 480px;
+        margin: 0 auto;
+        padding: 0 8px;
+    }
+    .bottom-nav .nav-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: 4px 8px;
+        color: #a0a0a0;
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+        transition: all 0.2s ease;
+        text-decoration: none;
+    }
+    .bottom-nav .nav-item.active {
+        color: #6aaa64;
+    }
+    .bottom-nav .nav-icon {
+        font-size: 1.35rem;
+        line-height: 1;
+    }
+    .bottom-nav .nav-label {
+        font-size: 0.6rem;
+        opacity: 0.9;
+    }
+
+    /* Streamlit button nella bottom nav - stile trasparente */
+    .bottom-nav-buttons .stButton > button {
+        background: transparent !important;
+        border: none !important;
+        color: #a0a0a0 !important;
+        min-height: 48px !important;
+        height: 48px !important;
+        padding: 0.2rem 0.3rem !important;
+        font-size: 0.68rem !important;
+        font-weight: 600 !important;
+        border-radius: 10px !important;
         transition: all 0.2s ease !important;
+        letter-spacing: 0.3px;
     }
-    .stTabs [data-baseweb="tab"]:hover { color: #c9b458 !important; }
-    .stTabs [aria-selected="true"] {
+    .bottom-nav-buttons .stButton > button:hover {
+        background: rgba(106, 170, 100, 0.12) !important;
         color: #6aaa64 !important;
-        border-bottom: 3px solid #6aaa64 !important;
-        background: rgba(106,170,100,0.08) !important;
+        border: none !important;
+    }
+    .bottom-nav-buttons .stButton > button:active {
+        background: rgba(106, 170, 100, 0.2) !important;
+    }
+
+    /* ============================================
+       ALTRI
+       ============================================ */
+    .stAlert {
+        background: #1a1a1b !important; border-radius: 10px !important;
+        padding: 0.5rem 0.8rem !important; font-size: 0.82rem !important;
+        border-left: 4px solid #6aaa64 !important;
+    }
+    .leader-card {
+        background: linear-gradient(135deg, #1a1a1b, #202022);
+        border-radius: 10px; padding: 10px 14px; margin-bottom: 6px;
+        border-left: 4px solid #6aaa64;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    .leader-card.me {
+        border-left-color: #c9b458;
+        background: linear-gradient(135deg, #232324, #2a2a25);
+    }
+    .leader-name { font-size: 1rem; font-weight: 700; color: #ffffff; }
+    .leader-stats { font-size: 0.78rem; color: #b0b0b0; margin-top: 2px; }
+
+    .stat-item { text-align: center; }
+    .stat-value {
+        font-size: 1.5rem; font-weight: 800;
+        background: linear-gradient(135deg, #6aaa64, #c9b458);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    .stat-label {
+        font-size: 0.6rem; color: #a0a0a0;
+        text-transform: uppercase; letter-spacing: 0.4px;
     }
 
     /* Avatar */
@@ -355,53 +361,31 @@ st.markdown("""
         width: 42px; height: 42px; font-size: 22px;
     }
 
-    /* Altri */
-    .stAlert {
-        background: #1a1a1b !important; border-radius: 10px !important;
-        padding: 0.5rem 0.8rem !important; font-size: 0.82rem !important;
-        border-left: 4px solid #6aaa64 !important;
+    /* Tab */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 6px !important; background: transparent !important;
+        border-bottom: 2px solid #2a2a2c !important; padding: 0 !important;
     }
-    .leader-card {
-        background: linear-gradient(135deg, #1a1a1b, #202022);
-        border-radius: 10px; padding: 10px 14px; margin-bottom: 6px;
-        border-left: 4px solid #6aaa64;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    .stTabs [data-baseweb="tab"] {
+        height: 44px !important; background: transparent !important;
+        border-radius: 0 !important; padding: 0 14px !important;
+        color: #888 !important; font-weight: 700 !important;
+        font-size: 0.9rem !important;
+        border-bottom: 3px solid transparent !important;
+        transition: all 0.2s ease !important;
     }
-    .leader-card.me {
-        border-left-color: #c9b458;
-        background: linear-gradient(135deg, #232324, #2a2a25);
-    }
-    .leader-name { font-size: 1rem; font-weight: 700; color: #ffffff; }
-    .leader-stats { font-size: 0.78rem; color: #b0b0b0; margin-top: 2px; }
-
-    .live-dot {
-        display: inline-block; width: 7px; height: 7px;
-        background: #6aaa64; border-radius: 50%; margin-right: 5px;
-        animation: pulse 2s infinite; vertical-align: middle;
-    }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-    .live-label {
-        text-align: center; color: #6aaa64;
-        font-size: 0.7rem; margin-bottom: 0.4rem;
-    }
-
-    .stat-item { text-align: center; }
-    .stat-value {
-        font-size: 1.5rem; font-weight: 800;
-        background: linear-gradient(135deg, #6aaa64, #c9b458);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        background-clip: text;
-    }
-    .stat-label {
-        font-size: 0.6rem; color: #a0a0a0;
-        text-transform: uppercase; letter-spacing: 0.4px;
+    .stTabs [data-baseweb="tab"]:hover { color: #c9b458 !important; }
+    .stTabs [aria-selected="true"] {
+        color: #6aaa64 !important;
+        border-bottom: 3px solid #6aaa64 !important;
+        background: rgba(106,170,100,0.08) !important;
     }
 
     /* Palloncini */
     .balloons-container {
         position: fixed; bottom: 0; left: 0;
         width: 100%; height: 100%;
-        pointer-events: none; z-index: 9999; overflow: hidden;
+        pointer-events: none; z-index: 9998; overflow: hidden;
     }
     .balloon {
         position: absolute; bottom: -150px;
@@ -442,28 +426,29 @@ st.markdown("""
 
     footer {visibility: hidden;}
 
-    /* Mobile compatto */
+    /* ============================================
+       MOBILE COMPATTO
+       ============================================ */
     @media (max-width: 380px) {
         .grid-cell { width: 44px; height: 44px; font-size: 22px; }
         .grid-row { gap: 3px; margin-bottom: 3px; }
-        .wordle-title { font-size: 1.2rem; letter-spacing: 3px; }
-        .wordle-tile { width: 24px; height: 24px; font-size: 12px; }
+        .wordle-title { font-size: 1.7rem; }
         .stTextInput input { height: 44px !important; letter-spacing: 2px; }
         .btn-invia > button { min-height: 44px !important; height: 44px !important; }
-        .compact-topbar .topbar-title { font-size: 0.95rem; letter-spacing: 2px; }
-        .compact-topbar .topbar-avatar { width: 30px; height: 30px; font-size: 16px; }
+        .bottom-nav .nav-icon { font-size: 1.2rem; }
+        .bottom-nav .nav-label { font-size: 0.55rem; }
     }
     @media (max-height: 720px) {
         .grid-cell { width: 44px; height: 44px; font-size: 22px; }
         .grid-row { margin-bottom: 3px; }
-        .wordle-title { font-size: 1.2rem; }
-        .wordle-tile { width: 24px; height: 24px; font-size: 12px; }
+        .wordle-title { font-size: 1.7rem; }
         .stTextInput input { height: 44px !important; }
         .btn-invia > button { min-height: 44px !important; height: 44px !important; }
     }
     @media (max-height: 600px) {
         .grid-cell { width: 40px; height: 40px; font-size: 20px; }
         .grid-row { gap: 3px; margin-bottom: 2px; }
+        .wordle-header { padding: 6px 0 4px 0; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -503,7 +488,6 @@ def get_worksheet(nome: str):
 # =========================================================
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def leggi_utenti() -> pd.DataFrame:
-    """Legge il foglio Utenti (cache 60s)."""
     ws = get_worksheet("Utenti")
     if ws is None:
         return pd.DataFrame(columns=["Username", "PIN_Hash", "Ruolo", "Data_Creazione"])
@@ -517,7 +501,6 @@ def leggi_utenti() -> pd.DataFrame:
 
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def leggi_partite() -> pd.DataFrame:
-    """Legge il foglio Partite (cache 60s)."""
     ws = get_worksheet("Partite")
     if ws is None:
         return pd.DataFrame(columns=["Data", "Username", "Modalità", "Tentativi_Usati", "Vinta", "Punti_Ottenuti"])
@@ -530,7 +513,6 @@ def leggi_partite() -> pd.DataFrame:
     return pd.DataFrame(dati)
 
 def invalida_cache():
-    """Pulisce la cache dopo ogni scrittura."""
     leggi_utenti.clear()
     leggi_partite.clear()
 
@@ -566,7 +548,6 @@ def registra_utente(username: str, pin: str, ruolo: str = "User") -> bool:
         return False
 
 def registra_partita(username: str, modalita: str, tentativi: int, vinta: bool, punti: int):
-    """Salva la partita. Chiamata SOLO per 'Parola del Giorno'."""
     ws = get_worksheet("Partite")
     if ws is None:
         return
@@ -636,10 +617,6 @@ def calcola_classifica() -> pd.DataFrame:
 # ADMIN - BATCH UPDATE
 # =========================================================
 def admin_reset_punti(username: str) -> bool:
-    """
-    Rimuove tutte le partite di un utente usando un update in batch.
-    Evita il rate limit di Google (HTTP 429).
-    """
     try:
         sh = get_gsheet_connection()
         if sh is None:
@@ -647,11 +624,9 @@ def admin_reset_punti(username: str) -> bool:
         ws = sh.worksheet("Partite")
         tutti = ws.get_all_values()
         if len(tutti) < 2:
-            return True  # solo intestazione
+            return True
         header = tutti[0]
-        # Filtra righe dell'utente
         righe_rimaste = [header] + [r for r in tutti[1:] if len(r) > 1 and r[1] != username]
-        # Svuota il foglio e riscrive tutto in un colpo
         ws.clear()
         if len(righe_rimaste) == 1:
             ws.update(values=righe_rimaste, range_name="A1")
@@ -664,7 +639,6 @@ def admin_reset_punti(username: str) -> bool:
         return False
 
 def admin_elimina_utente(username: str) -> bool:
-    """Elimina un utente aggiornando in batch la scheda Utenti."""
     try:
         sh = get_gsheet_connection()
         if sh is None:
@@ -791,6 +765,7 @@ def invia_tentativo(parola_input: str = None):
 
 def usa_suggerimento():
     if st.session_state.suggerimento_usato:
+        st.toast("Hai già usato il suggerimento per questa partita!", icon="ℹ️")
         return
     res = get_suggerimento()
     if res is None:
@@ -809,51 +784,63 @@ def torna_al_menu():
         st.session_state.pop(k, None)
     st.rerun()
 
+def vai_a(pagina: str):
+    """Naviga a una pagina specifica."""
+    st.session_state.pagina = pagina
+    st.rerun()
+
 # =========================================================
 # RENDER COMPONENTI
 # =========================================================
 def render_header():
-    """Header classico (login/menu) con tessere Wordle."""
+    """Header con logo PAROLARIO centrato e gradient."""
     st.markdown("""
         <div class="wordle-header">
-            <div class="wordle-tiles">
-                <div class="wordle-tile tile-green">P</div>
-                <div class="wordle-tile tile-yellow">A</div>
-                <div class="wordle-tile tile-gray">R</div>
-                <div class="wordle-tile tile-green">O</div>
-                <div class="wordle-tile tile-yellow">L</div>
-            </div>
             <div class="wordle-title">PAROLARIO</div>
             <div class="wordle-subtitle">Indovina la parola di 5 lettere</div>
         </div>
     """, unsafe_allow_html=True)
 
-def render_topbar_compatta():
-    """
-    Top bar compatta: [🏠 Menu] [🟩 PAROLARIO] [avatar]
-    Da usare in gioco per risparmiare spazio verticale.
-    """
-    utente = st.session_state.utente or "—"
-    ruolo = st.session_state.get("ruolo", "User")
-    avatar = get_avatar(utente, ruolo)
-    avatar_classe = "admin" if ruolo == "Admin" else ""
+def render_bottom_nav():
+    """Bottom navigation bar fissa con 4 icone."""
+    # Determina la pagina attiva
+    pagina = st.session_state.get("pagina", "menu")
+    if pagina == "gioco":
+        # Durante il gioco, consideriamo "Home" come attiva
+        pagina_attiva = "menu"
+    else:
+        pagina_attiva = pagina
 
-    col_menu, col_title, col_avatar = st.columns([1, 4, 1], gap="small")
-    with col_menu:
-        st.markdown('<div class="menu-mini">', unsafe_allow_html=True)
-        if st.button("🏠", use_container_width=True, key="topbar_menu"):
-            torna_al_menu()
-        st.markdown('</div>', unsafe_allow_html=True)
-    with col_title:
-        st.markdown('<div class="compact-topbar"><div class="topbar-title">🟩 PAROLARIO</div></div>',
-                    unsafe_allow_html=True)
-    with col_avatar:
-        st.markdown(
-            f'<div style="display:flex;justify-content:flex-end;">'
-            f'<div class="topbar-avatar {avatar_classe}">{avatar}</div>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
+    # Contenitore fisso
+    st.markdown('<div class="bottom-nav">', unsafe_allow_html=True)
+    st.markdown('<div class="bottom-nav-buttons">', unsafe_allow_html=True)
+
+    col1, col2, col3, col4 = st.columns(4, gap="small")
+
+    with col1:
+        if st.button("🏠\nHome", use_container_width=True, key="nav_home"):
+            if pagina == "gioco":
+                torna_al_menu()
+            else:
+                vai_a("menu")
+    with col2:
+        if st.button("🏆\nClassifica", use_container_width=True, key="nav_classifica"):
+            vai_a("classifica")
+    with col3:
+        # Suggerimento: attivo solo se in gioco e non usato
+        if pagina == "gioco" and not st.session_state.get("finita", False):
+            if st.button("💡\nSuggerisci", use_container_width=True, key="nav_hint"):
+                usa_suggerimento()
+                st.rerun()
+        else:
+            if st.button("💡\nExtra", use_container_width=True, key="nav_extra"):
+                vai_a("statistiche")
+    with col4:
+        if st.button("⚙️\nImpost.", use_container_width=True, key="nav_impost"):
+            vai_a("impostazioni")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 def render_griglia():
     sugg_pos = st.session_state.get("suggerimento_pos")
@@ -948,60 +935,6 @@ def render_palloncini():
                 unsafe_allow_html=True)
 
 # =========================================================
-# SIDEBAR
-# =========================================================
-def render_sidebar():
-    with st.sidebar:
-        utente = st.session_state.utente or "—"
-        ruolo = st.session_state.get("ruolo", "User")
-        avatar = get_avatar(utente, ruolo)
-        ruolo_label = get_ruolo_label(ruolo)
-
-        st.markdown("""
-            <div style="text-align:center; padding-bottom:0.6rem;">
-                <div style="font-size:1.3rem; font-weight:900;
-                            background:linear-gradient(135deg,#6aaa64,#c9b458);
-                            -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-                            letter-spacing:3px;">PAROLARIO</div>
-            </div>
-        """, unsafe_allow_html=True)
-
-        nome_vis = utente if len(utente) <= 14 else utente[:13] + "…"
-        avatar_classe = "admin" if ruolo == "Admin" else ""
-        ruolo_classe = "admin" if ruolo == "Admin" else ""
-        st.markdown(f"""
-            <div class="sidebar-player">
-                <div class="user-avatar {avatar_classe}">{avatar}</div>
-                <div class="user-info">
-                    <div class="user-name">{nome_vis}</div>
-                    <div class="user-role {ruolo_classe}">{ruolo_label}</div>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown('<div class="sidebar-section">Navigazione</div>', unsafe_allow_html=True)
-        if st.button("🏠  Menu principale", use_container_width=True, key="sb_menu"):
-            torna_al_menu()
-        if st.button("🏆  Classifica", use_container_width=True, key="sb_leader"):
-            st.session_state.pagina = "classifica"
-            st.rerun()
-        if st.button("📊  Statistiche", use_container_width=True, key="sb_stats"):
-            st.session_state.pagina = "statistiche"
-            st.rerun()
-
-        if ruolo == "Admin":
-            st.markdown('<div class="sidebar-section">👑 Admin Panel</div>', unsafe_allow_html=True)
-            if st.button("⚙️  Pannello Admin", use_container_width=True, key="sb_admin"):
-                st.session_state.pagina = "admin"
-                st.rerun()
-
-        st.markdown('<div class="sidebar-section">Sessione</div>', unsafe_allow_html=True)
-        if st.button("🚪  Logout", use_container_width=True, key="sb_logout"):
-            for k in list(st.session_state.keys()):
-                st.session_state.pop(k, None)
-            st.rerun()
-
-# =========================================================
 # LOGIN / REGISTRAZIONE
 # =========================================================
 def render_login():
@@ -1040,7 +973,12 @@ def render_login():
                     pin_hash = str(riga.iloc[0]["PIN_Hash"]).strip()
                     if verifica_pin(pin_inserito, pin_hash):
                         st.session_state.utente = utente_scelto
-                        st.session_state.ruolo = riga.iloc[0].get("Ruolo", "User")
+                        nome_utente = str(riga.iloc[0]["Username"]).strip()
+                        ruolo_foglio = str(riga.iloc[0].get("Ruolo", "User")).strip()
+                        if nome_utente.lower() == "admin":
+                            st.session_state.ruolo = "Admin"
+                        else:
+                            st.session_state.ruolo = ruolo_foglio if ruolo_foglio else "User"
                         st.session_state.pagina = "menu"
                         st.rerun()
                     else:
@@ -1081,8 +1019,26 @@ def pagina_menu():
     render_header()
 
     utente = st.session_state.utente
+    ruolo = st.session_state.get("ruolo", "User")
+
+    # Barra utente compatta
+    avatar = get_avatar(utente, ruolo)
+    ruolo_label = get_ruolo_label(ruolo)
+    avatar_classe = "admin" if ruolo == "Admin" else ""
+    ruolo_classe = "admin" if ruolo == "Admin" else ""
+    st.markdown(f"""
+        <div class="sidebar-player" style="margin-bottom:0.6rem;">
+            <div class="user-avatar {avatar_classe}">{avatar}</div>
+            <div class="user-info">
+                <div class="user-name">{utente}</div>
+                <div class="user-role {ruolo_classe}">{ruolo_label}</div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Stato parola di oggi
     gia_giocato = None
-    if st.session_state.get("ruolo") != "Guest":
+    if ruolo != "Guest":
         gia_giocato = ha_giocato_oggi(utente)
 
     if gia_giocato:
@@ -1090,7 +1046,7 @@ def pagina_menu():
                 f"{'Vinto' if gia_giocato['vinta'] else 'Non indovinata'} "
                 f"in {gia_giocato['tentativi']} tentativi — {gia_giocato['punti']} punti.")
 
-    st.markdown('<div style="height:0.2rem;"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
     st.markdown('<div class="mode-btn">', unsafe_allow_html=True)
     if st.button("📅  PAROLA DEL GIORNO", use_container_width=True, key="m_daily",
                  disabled=bool(gia_giocato)):
@@ -1103,35 +1059,21 @@ def pagina_menu():
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div style="height:0.2rem;"></div>', unsafe_allow_html=True)
-    c1, c2 = st.columns(2, gap="small")
-    with c1:
-        if st.button("🏆  Classifica", use_container_width=True, key="m_leader"):
-            st.session_state.pagina = "classifica"
-            st.rerun()
-    with c2:
-        if st.button("📊  Statistiche", use_container_width=True, key="m_stats"):
-            st.session_state.pagina = "statistiche"
-            st.rerun()
-
     st.caption("📅 Parola del Giorno → conta in classifica · 🎲 Gioca Ancora → allenamento")
 
 def pagina_gioco():
-    # ✅ TOP BAR COMPATTA invece dell'header grande
-    render_topbar_compatta()
+    render_header()
 
     mod = st.session_state.modalita
     if mod == "daily":
-        info_extra = '<div style="text-align:center;color:#6aaa64;font-size:0.66rem;margin:0;">✦ Conta in classifica ✦</div>'
+        info_extra = '<div style="text-align:center;color:#6aaa64;font-size:0.68rem;margin:0.2rem 0;">✦ Conta in classifica ✦</div>'
     else:
-        info_extra = '<div style="text-align:center;color:#a0a0a0;font-size:0.66rem;margin:0;">Modalità allenamento</div>'
+        info_extra = '<div style="text-align:center;color:#a0a0a0;font-size:0.68rem;margin:0.2rem 0;">Modalità allenamento</div>'
     st.markdown(info_extra, unsafe_allow_html=True)
 
     render_griglia()
 
-    # ============================================
     # FINE PARTITA
-    # ============================================
     if st.session_state.finita:
         if st.session_state.vinto:
             n = len(st.session_state.tentativi)
@@ -1170,22 +1112,18 @@ def pagina_gioco():
             else:
                 st.error(f"😢 Peccato! Era: **{st.session_state.soluzione}** (allenamento)")
 
-        st.markdown('<div style="height:0.2rem;"></div>', unsafe_allow_html=True)
+        st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
         c1, c2 = st.columns(2, gap="small")
         with c1:
             if st.button("🔄  Nuova", use_container_width=True, key="end_new"):
                 reset_partita("unlimited")
                 st.rerun()
         with c2:
-            st.markdown('<div class="menu-btn">', unsafe_allow_html=True)
             if st.button("🏠  Menù", use_container_width=True, key="end_menu"):
                 torna_al_menu()
-            st.markdown('</div>', unsafe_allow_html=True)
         return
 
-    # ============================================
     # INPUT + INVIO
-    # ============================================
     key_input = f"input_parola_{st.session_state.input_version}"
 
     col_input, col_invia = st.columns([3, 1], gap="small")
@@ -1206,38 +1144,26 @@ def pagina_gioco():
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Suggerimento
+    # Suggerimento (visibile solo se non usato)
     if not st.session_state.suggerimento_usato:
-        st.markdown('<div class="hint-btn">', unsafe_allow_html=True)
-        if st.button("💡  SUGGERIMENTO", use_container_width=True, key="hint_btn"):
-            usa_suggerimento()
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-    else:
         st.markdown(
-            '<div style="text-align:center;color:#c9b458;font-size:0.72rem;'
-            'padding:0.25rem 0;letter-spacing:0.5px;">💡 Suggerimento usato</div>',
+            '<div style="text-align:center;color:#c9b458;font-size:0.7rem;'
+            'padding:0.3rem 0;letter-spacing:0.5px;">💡 Usa il tasto "Suggerisci" nel menu in basso</div>',
             unsafe_allow_html=True
         )
-
-    # Pulsante Menù in basso (ridondante ma comodo)
-    st.markdown('<div style="height:0.2rem;"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="menu-btn">', unsafe_allow_html=True)
-    if st.button("🏠  Torna al Menù", use_container_width=True, key="play_menu_btn"):
-        torna_al_menu()
-    st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(
+            '<div style="text-align:center;color:#c9b458;font-size:0.7rem;'
+            'padding:0.3rem 0;letter-spacing:0.5px;">💡 Suggerimento usato</div>',
+            unsafe_allow_html=True
+        )
 
 def pagina_classifica():
     render_header()
     st.markdown('<div style="text-align:center;color:#fff;font-size:0.95rem;font-weight:700;margin:0.4rem 0;">🏆 Classifica</div>',
                 unsafe_allow_html=True)
-    st.markdown('<div class="live-label"><span class="live-dot"></span>'
-                'Solo Parola del Giorno · Live</div>', unsafe_allow_html=True)
     render_classifica()
-    st.markdown('<div class="menu-btn">', unsafe_allow_html=True)
-    if st.button("🏠  Torna al Menù", use_container_width=True, key="back_menu"):
-        torna_al_menu()
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
 
 def pagina_statistiche():
     render_header()
@@ -1273,10 +1199,43 @@ def pagina_statistiche():
                 df_chart = pd.DataFrame({"Tentativi": [f"{i}°" for i in dist.index], "Volte": dist.values})
                 st.bar_chart(df_chart, x="Tentativi", y="Volte", color="#6aaa64", height=170)
 
-    st.markdown('<div class="menu-btn">', unsafe_allow_html=True)
-    if st.button("🏠  Torna al Menù", use_container_width=True, key="back_stats"):
-        torna_al_menu()
-    st.markdown('</div>', unsafe_allow_html=True)
+def pagina_impostazioni():
+    """Pagina impostazioni con profilo, admin e logout."""
+    render_header()
+
+    utente = st.session_state.utente or "—"
+    ruolo = st.session_state.get("ruolo", "User")
+    avatar = get_avatar(utente, ruolo)
+    ruolo_label = get_ruolo_label(ruolo)
+    avatar_classe = "admin" if ruolo == "Admin" else ""
+    ruolo_classe = "admin" if ruolo == "Admin" else ""
+
+    st.markdown(f'<div style="text-align:center;color:#fff;font-size:0.95rem;font-weight:700;margin:0.4rem 0;">⚙️ Impostazioni</div>',
+                unsafe_allow_html=True)
+
+    # Card profilo
+    st.markdown(f"""
+        <div class="sidebar-player">
+            <div class="user-avatar {avatar_classe}">{avatar}</div>
+            <div class="user-info">
+                <div class="user-name">{utente}</div>
+                <div class="user-role {ruolo_classe}">{ruolo_label}</div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div style="height:0.4rem;"></div>', unsafe_allow_html=True)
+
+    # Pulsante Admin (solo per Admin)
+    if ruolo == "Admin":
+        if st.button("👑  PANNELLO ADMIN", use_container_width=True, key="set_admin"):
+            vai_a("admin")
+
+    # Logout
+    if st.button("🚪  LOGOUT", use_container_width=True, key="set_logout"):
+        for k in list(st.session_state.keys()):
+            st.session_state.pop(k, None)
+        st.rerun()
 
 def pagina_admin():
     render_header()
@@ -1313,11 +1272,6 @@ def pagina_admin():
         st.caption(f"Parole valide: {len(PAROLE_VALIDE)}")
         st.info("Per modificare le parole, aggiorna `parole.py` su GitHub.")
 
-    st.markdown('<div class="menu-btn">', unsafe_allow_html=True)
-    if st.button("🏠  Torna al Menù", use_container_width=True, key="back_admin"):
-        torna_al_menu()
-    st.markdown('</div>', unsafe_allow_html=True)
-
 # =========================================================
 # ROUTING
 # =========================================================
@@ -1332,18 +1286,12 @@ defaults = {
 for k, v in defaults.items():
     st.session_state.setdefault(k, v)
 
-if st.session_state.utente:
-    render_sidebar()
-    # 🔍 DEBUG TEMPORANEO
-    with st.sidebar:
-        st.markdown("---")
-        st.markdown("### 🔍 DEBUG")
-        st.write("utente:", repr(st.session_state.get("utente")))
-        st.write("ruolo:", repr(st.session_state.get("ruolo")))
-        st.write("tipo ruolo:", type(st.session_state.get("ruolo")).__name__)
-        st.write("è Admin?:", st.session_state.get("ruolo") == "Admin")
-        st.write("pagina:", repr(st.session_state.get("pagina")))
+if st.session_state.utente and st.session_state.pagina in PAGINE_CON_REFRESH:
+    st_autorefresh(interval=REFRESH_MS, key="auto_refresh")
 
+# =========================================================
+# RENDERING PAGINE
+# =========================================================
 if not st.session_state.utente:
     render_login()
 elif st.session_state.pagina == "menu":
@@ -1354,7 +1302,15 @@ elif st.session_state.pagina == "classifica":
     pagina_classifica()
 elif st.session_state.pagina == "statistiche":
     pagina_statistiche()
+elif st.session_state.pagina == "impostazioni":
+    pagina_impostazioni()
 elif st.session_state.pagina == "admin" and st.session_state.get("ruolo") == "Admin":
     pagina_admin()
 else:
     pagina_menu()
+
+# =========================================================
+# BOTTOM NAVIGATION (sempre visibile quando loggato)
+# =========================================================
+if st.session_state.utente:
+    render_bottom_nav()

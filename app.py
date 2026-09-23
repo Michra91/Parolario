@@ -1,7 +1,7 @@
 # app.py
 """
-Parolario v4 — Wordle in famiglia con autenticazione PIN, Admin panel,
-persistenza su Google Sheets e restyling UI/UX completo.
+Parolario v5 — Wordle in famiglia con autenticazione PIN, Admin panel,
+persistenza su Google Sheets e classifica solo per la Parola del Giorno.
 """
 
 import streamlit as st
@@ -43,9 +43,6 @@ PAGINE_CON_REFRESH = {"classifica", "menu", "statistiche"}
 # =========================================================
 st.markdown("""
 <style>
-    /* ============================================
-       CONTAINER
-       ============================================ */
     .main .block-container {
         padding-top: 0.3rem !important;
         padding-bottom: 0.3rem !important;
@@ -63,32 +60,18 @@ st.markdown("""
     .element-container { margin-bottom: 0 !important; }
     div[data-testid="column"] { padding: 0 !important; }
 
-    /* ============================================
-       HEADER CON TESSERE WORDLE
-       ============================================ */
+    /* Header Wordle */
     .wordle-header {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 8px 0 4px 0;
-        margin-bottom: 0.3rem;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        padding: 8px 0 4px 0; margin-bottom: 0.3rem;
     }
-    .wordle-tiles {
-        display: flex;
-        gap: 6px;
-        margin-bottom: 6px;
-    }
+    .wordle-tiles { display: flex; gap: 6px; margin-bottom: 6px; }
     .wordle-tile {
-        width: 32px;
-        height: 32px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 16px;
-        font-weight: 800;
-        border-radius: 6px;
-        color: #fff;
+        width: 32px; height: 32px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 16px; font-weight: 800;
+        border-radius: 6px; color: #fff;
         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         animation: tile-bounce 2s ease-in-out infinite;
     }
@@ -104,55 +87,34 @@ st.markdown("""
     .tile-green  { background: linear-gradient(135deg, #6aaa64, #4d8a48); }
     .tile-yellow { background: linear-gradient(135deg, #c9b458, #a89540); }
     .tile-gray   { background: linear-gradient(135deg, #565758, #3a3a3c); }
-
     .wordle-title {
-        font-size: 1.6rem;
-        font-weight: 900;
-        letter-spacing: 4px;
-        color: #ffffff;
+        font-size: 1.6rem; font-weight: 900;
+        letter-spacing: 4px; color: #ffffff;
         text-shadow: 0 0 20px rgba(106,170,100,0.4);
-        margin: 0;
-        text-align: center;
+        margin: 0; text-align: center;
     }
     .wordle-subtitle {
-        font-size: 0.7rem;
-        color: #a0a0a0;
-        letter-spacing: 2px;
-        text-transform: uppercase;
-        margin-top: 2px;
+        font-size: 0.7rem; color: #a0a0a0;
+        letter-spacing: 2px; text-transform: uppercase; margin-top: 2px;
     }
 
-    /* ============================================
-       GRIGLIA DI GIOCO
-       ============================================ */
+    /* Griglia */
     .grid-wrapper {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        margin: 0.3rem auto;
-        width: 100%;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        margin: 0.3rem auto; width: 100%;
     }
     .grid-row {
-        display: flex;
-        gap: 5px;
-        justify-content: center;
-        margin-bottom: 5px;
+        display: flex; gap: 5px;
+        justify-content: center; margin-bottom: 5px;
     }
     .grid-cell {
-        width: 56px;
-        height: 56px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 28px;
-        font-weight: 800;
-        border: 2px solid #3a3a3c;
-        border-radius: 8px;
-        text-transform: uppercase;
-        color: #ffffff;
-        background: #1a1a1b;
-        transition: all 0.15s ease;
+        width: 56px; height: 56px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 28px; font-weight: 800;
+        border: 2px solid #3a3a3c; border-radius: 8px;
+        text-transform: uppercase; color: #ffffff;
+        background: #1a1a1b; transition: all 0.15s ease;
         line-height: 1;
         box-shadow: inset 0 1px 2px rgba(255,255,255,0.03);
     }
@@ -168,13 +130,10 @@ st.markdown("""
         box-shadow: 0 2px 8px rgba(201,180,88,0.4);
     }
     .grid-cell.absent {
-        background: #3a3a3c;
-        border-color: #3a3a3c;
-        color: #b0b0b0;
+        background: #3a3a3c; border-color: #3a3a3c; color: #b0b0b0;
     }
     .grid-cell.hint {
-        border-color: #c9b458;
-        background: #2a2a1b;
+        border-color: #c9b458; background: #2a2a1b;
         animation: pulse-hint 1s infinite;
     }
     @keyframes pulse-hint {
@@ -182,22 +141,15 @@ st.markdown("""
         50%      { box-shadow: 0 0 0 8px rgba(201,180,88,0); }
     }
 
-    /* ============================================
-       INDICATORE TENTATIVI
-       ============================================ */
+    /* Pallini tentativi */
     .attempts-bar {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 8px;
-        margin: 0.4rem 0;
-        padding: 8px 0;
+        display: flex; justify-content: center;
+        align-items: center; gap: 8px;
+        margin: 0.3rem 0; padding: 6px 0;
     }
     .attempt-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: #3a3a3c;
+        width: 10px; height: 10px;
+        border-radius: 50%; background: #3a3a3c;
         transition: all 0.3s ease;
     }
     .attempt-dot.used {
@@ -217,47 +169,32 @@ st.markdown("""
         50% { transform: scale(1.3); }
     }
 
-    /* ============================================
-       INPUT + PULSANTE INVIA
-       ============================================ */
+    /* Input + INVIA */
     .stTextInput input {
-        font-size: 1.3rem !important;
-        font-weight: 700 !important;
-        padding: 0.6rem 0.8rem !important;
-        text-transform: uppercase;
-        text-align: center;
-        letter-spacing: 4px;
-        background: #1a1a1b !important;
-        color: #fff !important;
+        font-size: 1.3rem !important; font-weight: 700 !important;
+        padding: 0.6rem 0.8rem !important; text-transform: uppercase;
+        text-align: center; letter-spacing: 4px;
+        background: #1a1a1b !important; color: #fff !important;
         border: 2px solid #3a3a3c !important;
-        border-radius: 12px !important;
-        height: 52px !important;
-        line-height: 1 !important;
-        transition: all 0.2s ease !important;
+        border-radius: 12px !important; height: 52px !important;
+        line-height: 1 !important; transition: all 0.2s ease !important;
     }
     .stTextInput input::placeholder {
-        color: #666 !important;
-        text-transform: none;
-        letter-spacing: normal;
-        font-weight: 400;
-        font-size: 0.9rem;
+        color: #666 !important; text-transform: none;
+        letter-spacing: normal; font-weight: 400; font-size: 0.9rem;
     }
     .stTextInput input:focus {
         border-color: #6aaa64 !important;
-        box-shadow: 0 0 0 3px rgba(106,170,100,0.25), 0 0 20px rgba(106,170,100,0.15) !important;
+        box-shadow: 0 0 0 3px rgba(106,170,100,0.25),
+                    0 0 20px rgba(106,170,100,0.15) !important;
         background: #222224 !important;
     }
-
     .btn-invia > button {
         background: linear-gradient(135deg, #6aaa64, #4d8a48) !important;
-        border: none !important;
-        color: #ffffff !important;
-        min-height: 52px !important;
-        height: 52px !important;
-        font-size: 0.95rem !important;
-        border-radius: 12px !important;
-        font-weight: 800 !important;
-        letter-spacing: 1px;
+        border: none !important; color: #ffffff !important;
+        min-height: 52px !important; height: 52px !important;
+        font-size: 0.95rem !important; border-radius: 12px !important;
+        font-weight: 800 !important; letter-spacing: 1px;
         padding: 0 0.5rem !important;
         box-shadow: 0 4px 12px rgba(106,170,100,0.35) !important;
         transition: all 0.15s ease !important;
@@ -267,18 +204,14 @@ st.markdown("""
         box-shadow: 0 6px 16px rgba(106,170,100,0.5) !important;
         transform: translateY(-1px);
     }
-    .btn-invia > button:active {
-        transform: translateY(1px) scale(0.98);
-    }
+    .btn-invia > button:active { transform: translateY(1px) scale(0.98); }
 
     .hint-btn > button {
         background: linear-gradient(135deg, #3a3520, #2a2a1b) !important;
         border: 2px solid #c9b458 !important;
         color: #f0d97a !important;
-        min-height: 44px !important;
-        font-size: 0.88rem !important;
-        font-weight: 700 !important;
-        border-radius: 10px !important;
+        min-height: 42px !important; font-size: 0.88rem !important;
+        font-weight: 700 !important; border-radius: 10px !important;
         padding: 0.4rem 0.6rem !important;
         box-shadow: 0 0 15px rgba(201,180,88,0.15) !important;
         transition: all 0.2s ease !important;
@@ -289,14 +222,30 @@ st.markdown("""
         color: #ffe680 !important;
     }
 
-    .stButton > button {
-        width: 100%;
+    /* Pulsante Menù / Torna al Menù (sempre visibile) */
+    .menu-btn > button {
+        background: linear-gradient(135deg, #2a2a2c, #1a1a1b) !important;
+        border: 1px solid #565758 !important;
+        color: #e8e8e8 !important;
+        min-height: 44px !important;
+        font-size: 0.9rem !important;
         font-weight: 700 !important;
-        background: #1a1a1b !important;
-        color: #ffffff !important;
-        border: 1px solid #3a3a3c !important;
         border-radius: 10px !important;
-        transition: all 0.15s ease;
+        letter-spacing: 0.5px !important;
+        transition: all 0.15s ease !important;
+    }
+    .menu-btn > button:hover {
+        background: linear-gradient(135deg, #3a3a3c, #2a2a2c) !important;
+        border-color: #6aaa64 !important;
+        color: #ffffff !important;
+        transform: translateY(-1px);
+    }
+
+    .stButton > button {
+        width: 100%; font-weight: 700 !important;
+        background: #1a1a1b !important; color: #ffffff !important;
+        border: 1px solid #3a3a3c !important;
+        border-radius: 10px !important; transition: all 0.15s ease;
     }
     .stButton > button:hover {
         background: #2a2a2c !important;
@@ -306,27 +255,19 @@ st.markdown("""
     .stButton > button:active { transform: translateY(0); }
 
     .mode-btn > button {
-        min-height: 56px !important;
-        font-size: 1rem !important;
+        min-height: 56px !important; font-size: 1rem !important;
         border-radius: 14px !important;
     }
 
-    /* ============================================
-       TAB LOGIN / REGISTRATI
-       ============================================ */
+    /* Tab */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px !important;
-        background: transparent !important;
-        border-bottom: 2px solid #2a2a2c !important;
-        padding: 0 !important;
+        gap: 8px !important; background: transparent !important;
+        border-bottom: 2px solid #2a2a2c !important; padding: 0 !important;
     }
     .stTabs [data-baseweb="tab"] {
-        height: 48px !important;
-        background: transparent !important;
-        border-radius: 0 !important;
-        padding: 0 16px !important;
-        color: #888 !important;
-        font-weight: 700 !important;
+        height: 48px !important; background: transparent !important;
+        border-radius: 0 !important; padding: 0 16px !important;
+        color: #888 !important; font-weight: 700 !important;
         font-size: 0.95rem !important;
         border-bottom: 3px solid transparent !important;
         transition: all 0.2s ease !important;
@@ -339,20 +280,13 @@ st.markdown("""
     }
     .stTabs [data-baseweb="tab-highlight"] { background: #6aaa64 !important; }
 
-    /* ============================================
-       AVATAR UTENTE
-       ============================================ */
+    /* Avatar */
     .user-avatar {
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        width: 48px; height: 48px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
         font-size: 26px;
         background: linear-gradient(135deg, #2a2a2c, #1a1a1b);
-        border: 2px solid #3a3a3c;
-        flex-shrink: 0;
+        border: 2px solid #3a3a3c; flex-shrink: 0;
     }
     .user-avatar.admin {
         background: linear-gradient(135deg, #4a3a1b, #2a2a1b);
@@ -361,54 +295,33 @@ st.markdown("""
     }
     .user-info { flex: 1; min-width: 0; }
     .user-name {
-        font-size: 1.05rem;
-        font-weight: 700;
-        color: #ffffff;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        font-size: 1.05rem; font-weight: 700; color: #ffffff;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .user-role {
-        font-size: 0.75rem;
-        color: #a0a0a0;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-top: 2px;
+        font-size: 0.75rem; color: #a0a0a0;
+        text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;
     }
     .user-role.admin { color: #c9b458; font-weight: 700; }
-
     .sidebar-player {
-        display: flex;
-        align-items: center;
-        gap: 12px;
+        display: flex; align-items: center; gap: 12px;
         background: linear-gradient(135deg, #1a1a1b, #232324);
-        border: 1px solid #3a3a3c;
-        border-radius: 12px;
-        padding: 12px;
-        margin-bottom: 1rem;
+        border: 1px solid #3a3a3c; border-radius: 12px;
+        padding: 12px; margin-bottom: 1rem;
     }
     .sidebar-player .user-avatar {
-        width: 42px;
-        height: 42px;
-        font-size: 22px;
+        width: 42px; height: 42px; font-size: 22px;
     }
 
-    /* ============================================
-       ALTRI ELEMENTI
-       ============================================ */
+    /* Altri */
     .stAlert {
-        background: #1a1a1b !important;
-        border-radius: 12px !important;
-        padding: 0.6rem 0.9rem !important;
-        font-size: 0.85rem !important;
+        background: #1a1a1b !important; border-radius: 12px !important;
+        padding: 0.6rem 0.9rem !important; font-size: 0.85rem !important;
         border-left: 4px solid #6aaa64 !important;
     }
-
     .leader-card {
         background: linear-gradient(135deg, #1a1a1b, #202022);
-        border-radius: 12px;
-        padding: 12px 16px;
-        margin-bottom: 8px;
+        border-radius: 12px; padding: 12px 16px; margin-bottom: 8px;
         border-left: 4px solid #6aaa64;
         box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     }
@@ -421,26 +334,20 @@ st.markdown("""
     .leader-stats { font-size: 0.8rem; color: #b0b0b0; margin-top: 3px; }
 
     .live-dot {
-        display: inline-block;
-        width: 7px; height: 7px;
-        background: #6aaa64;
-        border-radius: 50%;
-        margin-right: 5px;
-        animation: pulse 2s infinite;
-        vertical-align: middle;
+        display: inline-block; width: 7px; height: 7px;
+        background: #6aaa64; border-radius: 50%; margin-right: 5px;
+        animation: pulse 2s infinite; vertical-align: middle;
     }
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.3; }
-    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
     .live-label {
-        text-align: center;
-        color: #6aaa64;
-        font-size: 0.72rem;
-        margin-bottom: 0.5rem;
+        text-align: center; color: #6aaa64;
+        font-size: 0.72rem; margin-bottom: 0.5rem;
     }
 
-    .badge-grid { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 0.75rem 0; }
+    .badge-grid {
+        display: flex; flex-wrap: wrap; gap: 8px;
+        justify-content: center; margin: 0.75rem 0;
+    }
     .badge-card {
         width: 95px; padding: 10px 6px; border-radius: 12px;
         text-align: center; border: 2px solid #3a3a3c;
@@ -458,18 +365,17 @@ st.markdown("""
 
     .stat-item { text-align: center; }
     .stat-value {
-        font-size: 1.6rem;
-        font-weight: 800;
+        font-size: 1.6rem; font-weight: 800;
         background: linear-gradient(135deg, #6aaa64, #c9b458);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         background-clip: text;
     }
-    .stat-label { font-size: 0.62rem; color: #a0a0a0; text-transform: uppercase; letter-spacing: 0.4px; }
+    .stat-label {
+        font-size: 0.62rem; color: #a0a0a0;
+        text-transform: uppercase; letter-spacing: 0.4px;
+    }
 
-    /* ============================================
-       PALLONCINI
-       ============================================ */
+    /* Palloncini */
     .balloons-container {
         position: fixed; bottom: 0; left: 0;
         width: 100%; height: 100%;
@@ -609,6 +515,10 @@ def registra_utente(username: str, pin: str, ruolo: str = "User") -> bool:
         return False
 
 def registra_partita(username: str, modalita: str, tentativi: int, vinta: bool, punti: int):
+    """
+    Salva la partita nel foglio Partite.
+    ⚠️ Viene chiamata SOLO per la modalità "Parola del Giorno".
+    """
     ws = get_worksheet("Partite")
     if ws is None:
         return
@@ -616,7 +526,7 @@ def registra_partita(username: str, modalita: str, tentativi: int, vinta: bool, 
         ws.append_row([
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             username,
-            "Giorno" if modalita == "daily" else "Illimitato",
+            "Giorno",  # Solo la modalità Giorno viene salvata
             tentativi,
             "Sì" if vinta else "No",
             punti,
@@ -644,7 +554,14 @@ def ha_giocato_oggi(username: str):
     }
 
 def calcola_classifica() -> pd.DataFrame:
+    """
+    Calcola la classifica dalle partite registrate (solo Parola del Giorno).
+    """
     df = leggi_partite()
+    if df.empty:
+        return pd.DataFrame(columns=["Username", "Punti", "Vittorie", "Partite", "Streak"])
+    # Filtra solo le partite di modalità "Giorno" (sicurezza extra)
+    df = df[df["Modalità"] == "Giorno"]
     if df.empty:
         return pd.DataFrame(columns=["Username", "Punti", "Vittorie", "Partite", "Streak"])
     agg = df.groupby("Username").agg(
@@ -671,7 +588,6 @@ def calcola_classifica() -> pd.DataFrame:
 # AVATAR E RUOLI
 # =========================================================
 def get_avatar(username: str, ruolo: str = "User") -> str:
-    """Restituisce un'emoji avatar in base al nome/ruolo."""
     if ruolo == "Admin":
         return "👑"
     nome_lower = str(username).lower()
@@ -783,11 +699,19 @@ def usa_suggerimento():
     st.session_state.suggerimento_usato = True
     st.toast(f"💡 Posizione {pos+1}: **{lettera}**", icon="💡")
 
+def torna_al_menu():
+    """Riporta al menu principale mantenendo la sessione."""
+    st.session_state.pagina = "menu"
+    for k in ["modalita", "soluzione", "tentativi", "corrente",
+              "finita", "vinto", "punteggio_assegnato",
+              "suggerimento_usato", "suggerimento_pos", "mostra_definizione"]:
+        st.session_state.pop(k, None)
+    st.rerun()
+
 # =========================================================
 # RENDER COMPONENTI
 # =========================================================
 def render_header():
-    """Header stilizzato con tessere Wordle."""
     st.markdown("""
         <div class="wordle-header">
             <div class="wordle-tiles">
@@ -796,10 +720,6 @@ def render_header():
                 <div class="wordle-tile tile-gray">R</div>
                 <div class="wordle-tile tile-green">O</div>
                 <div class="wordle-tile tile-yellow">L</div>
-                <div class="wordle-tile tile-green">A</div>
-                <div class="wordle-tile tile-gray">R</div>
-                <div class="wordle-tile tile-yellow">I</div>
-                <div class="wordle-tile tile-green">O</div>
             </div>
             <div class="wordle-title">PAROLARIO</div>
             <div class="wordle-subtitle">Indovina la parola di 5 lettere</div>
@@ -811,7 +731,6 @@ def render_griglia():
     key_dinamica = f"input_parola_{st.session_state.get('input_version', 0)}"
     corrente = st.session_state.get(key_dinamica, "").upper()
 
-    # Barra dei pallini tentativi
     n_tentativi = len(st.session_state.tentativi)
     finita = st.session_state.get("finita", False)
     vinto = st.session_state.get("vinto", False)
@@ -828,7 +747,6 @@ def render_griglia():
     pallini_html += '</div>'
     st.markdown(pallini_html, unsafe_allow_html=True)
 
-    # Griglia
     righe_html = ['<div class="grid-wrapper">']
     for r in range(MAX_TRIES):
         celle = []
@@ -866,7 +784,7 @@ def genera_risultato_condivisione():
 def render_classifica():
     df = calcola_classifica()
     if df.empty:
-        st.info("Nessun giocatore registrato ancora.")
+        st.info("Nessuna partita registrata ancora. Gioca la **Parola del Giorno** per entrare in classifica!")
         return
     for pos, (_, riga) in enumerate(df.iterrows(), start=1):
         medaglia = {1: "🥇", 2: "🥈", 3: "🥉"}.get(pos, f"{pos}.")
@@ -934,12 +852,7 @@ def render_sidebar():
 
         st.markdown('<div class="sidebar-section">Navigazione</div>', unsafe_allow_html=True)
         if st.button("🏠  Menu principale", use_container_width=True, key="sb_menu"):
-            st.session_state.pagina = "menu"
-            for k in ["modalita", "soluzione", "tentativi", "corrente",
-                      "finita", "vinto", "punteggio_assegnato",
-                      "suggerimento_usato", "suggerimento_pos", "mostra_definizione"]:
-                st.session_state.pop(k, None)
-            st.rerun()
+            torna_al_menu()
         if st.button("🏆  Classifica", use_container_width=True, key="sb_leader"):
             st.session_state.pagina = "classifica"
             st.rerun()
@@ -963,7 +876,6 @@ def render_sidebar():
 # LOGIN / REGISTRAZIONE
 # =========================================================
 def render_login():
-    """Schermata di login/registrazione con header stilizzato."""
     render_header()
 
     tab_login, tab_register = st.tabs(["🔐  Accedi", "📝  Registrati"])
@@ -1056,7 +968,7 @@ def pagina_menu():
         reset_partita("daily")
         st.session_state.pagina = "gioco"
         st.rerun()
-    if st.button("🎲  GIOCA ANCORA", use_container_width=True, key="m_unlimited"):
+    if st.button("🎲  GIOCA ANCORA  (allenamento)", use_container_width=True, key="m_unlimited"):
         reset_partita("unlimited")
         st.session_state.pagina = "gioco"
         st.rerun()
@@ -1073,11 +985,22 @@ def pagina_menu():
             st.session_state.pagina = "statistiche"
             st.rerun()
 
+    st.markdown('<div style="height:0.4rem;"></div>', unsafe_allow_html=True)
+    st.caption("📅 Parola del Giorno → conta in classifica · 🎲 Gioca Ancora → solo allenamento")
+
 def pagina_gioco():
     render_header()
-    titolo_mod = "📅 Parola del Giorno" if st.session_state.modalita == "daily" else "🎲 Illimitato"
-    st.markdown(f'<div class="mode-label" style="text-align:center;color:#a0a0a0;font-size:0.72rem;margin-bottom:0.3rem;">{titolo_mod}</div>',
+    mod = st.session_state.modalita
+    if mod == "daily":
+        titolo_mod = "📅 Parola del Giorno"
+        info_extra = '<div style="text-align:center;color:#6aaa64;font-size:0.68rem;margin-bottom:0.2rem;">✦ Questa partita conta in classifica ✦</div>'
+    else:
+        titolo_mod = "🎲 Gioco Illimitato"
+        info_extra = '<div style="text-align:center;color:#a0a0a0;font-size:0.68rem;margin-bottom:0.2rem;">Modalità allenamento — non aggiorna la classifica</div>'
+
+    st.markdown(f'<div class="mode-label" style="text-align:center;color:#a0a0a0;font-size:0.72rem;margin-bottom:0.2rem;">{titolo_mod}</div>',
                 unsafe_allow_html=True)
+    st.markdown(info_extra, unsafe_allow_html=True)
 
     render_griglia()
 
@@ -1089,11 +1012,16 @@ def pagina_gioco():
             n = len(st.session_state.tentativi)
             punti = calcola_punti(n)
             if not st.session_state.punteggio_assegnato:
-                if st.session_state.get("ruolo") != "Guest":
-                    registra_partita(st.session_state.utente, st.session_state.modalita, n, True, punti)
+                # ✅ SOLO Parola del Giorno salva in classifica
+                if mod == "daily" and st.session_state.get("ruolo") != "Guest":
+                    registra_partita(st.session_state.utente, "daily", n, True, punti)
                 st.session_state.punteggio_assegnato = True
                 render_palloncini()
-            st.success(f"🎉 Bravissimo! In {n} tentativi — **+{punti} punti!**")
+
+            if mod == "daily":
+                st.success(f"🎉 Bravissimo! In {n} tentativi — **+{punti} punti in classifica!**")
+            else:
+                st.success(f"🎉 Bravo! In {n} tentativi — *allenamento completato*")
 
             with st.expander("📋 Condividi risultato"):
                 st.code(genera_risultato_condivisione(), language=None)
@@ -1109,10 +1037,15 @@ def pagina_gioco():
                             f"[Wikizionario](https://it.wiktionary.org/wiki/{p.lower()})")
         else:
             if not st.session_state.punteggio_assegnato:
-                if st.session_state.get("ruolo") != "Guest":
-                    registra_partita(st.session_state.utente, st.session_state.modalita, MAX_TRIES, False, 0)
+                # ✅ SOLO Parola del Giorno salva la sconfitta in classifica
+                if mod == "daily" and st.session_state.get("ruolo") != "Guest":
+                    registra_partita(st.session_state.utente, "daily", MAX_TRIES, False, 0)
                 st.session_state.punteggio_assegnato = True
-            st.error(f"😢 Peccato! La parola era: **{st.session_state.soluzione}**")
+
+            if mod == "daily":
+                st.error(f"😢 Peccato! La parola era: **{st.session_state.soluzione}** (sconfitta registrata)")
+            else:
+                st.error(f"😢 Peccato! La parola era: **{st.session_state.soluzione}** (allenamento)")
 
         st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
         c1, c2 = st.columns(2, gap="small")
@@ -1121,9 +1054,8 @@ def pagina_gioco():
                 reset_partita("unlimited")
                 st.rerun()
         with c2:
-            if st.button("🏠  Menu", use_container_width=True, key="end_menu"):
-                st.session_state.pagina = "menu"
-                st.rerun()
+            if st.button("🏠  Menù", use_container_width=True, key="end_menu"):
+                torna_al_menu()
         return
 
     # ============================================
@@ -1160,18 +1092,31 @@ def pagina_gioco():
     else:
         st.markdown(
             '<div style="text-align:center;color:#c9b458;font-size:0.75rem;'
-            'padding:0.5rem 0;letter-spacing:0.5px;">💡 Suggerimento già usato</div>',
+            'padding:0.35rem 0;letter-spacing:0.5px;">💡 Suggerimento già usato</div>',
             unsafe_allow_html=True
         )
 
+    # ============================================
+    # PULSANTE TORNA AL MENÙ (sempre visibile)
+    # ============================================
+    st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="menu-btn">', unsafe_allow_html=True)
+    if st.button("🏠  Torna al Menù", use_container_width=True, key="play_menu_btn"):
+        torna_al_menu()
+    st.markdown('</div>', unsafe_allow_html=True)
+
 def pagina_classifica():
     render_header()
+    st.markdown('<div style="text-align:center;color:#fff;font-size:1rem;font-weight:700;margin:0.5rem 0;">🏆 Classifica</div>',
+                unsafe_allow_html=True)
     st.markdown('<div class="live-label"><span class="live-dot"></span>'
-                'Dati in tempo reale da Google Sheets</div>', unsafe_allow_html=True)
+                'Solo Parola del Giorno · Dati live</div>', unsafe_allow_html=True)
     render_classifica()
-    if st.button("⬅️  Torna al Menu", use_container_width=True, key="back_menu"):
-        st.session_state.pagina = "menu"
-        st.rerun()
+    st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="menu-btn">', unsafe_allow_html=True)
+    if st.button("🏠  Torna al Menù", use_container_width=True, key="back_menu"):
+        torna_al_menu()
+    st.markdown('</div>', unsafe_allow_html=True)
 
 def pagina_statistiche():
     render_header()
@@ -1181,11 +1126,11 @@ def pagina_statistiche():
 
     df = leggi_partite()
     if df.empty:
-        st.info("Nessuna partita registrata.")
+        st.info("Nessuna partita registrata ancora.")
     else:
         df_u = df[df["Username"] == utente]
         if df_u.empty:
-            st.info("Nessuna partita per questo utente.")
+            st.info("Nessuna partita registrata. Gioca la Parola del Giorno!")
         else:
             partite = len(df_u)
             vittorie = len(df_u[df_u["Vinta"] == "Sì"])
@@ -1199,14 +1144,19 @@ def pagina_statistiche():
                 with col:
                     st.markdown(f'<div class="stat-item"><div class="stat-value">{val}</div>'
                                 f'<div class="stat-label">{label}</div></div>', unsafe_allow_html=True)
+
             dist = df_u[df_u["Vinta"] == "Sì"]["Tentativi_Usati"].value_counts().sort_index()
             if not dist.empty:
+                st.markdown('<div style="color:#fff;font-size:0.9rem;font-weight:700;margin:0.6rem 0 0.3rem 0;">📈 Distribuzione</div>',
+                            unsafe_allow_html=True)
                 df_chart = pd.DataFrame({"Tentativi": [f"{i}°" for i in dist.index], "Volte": dist.values})
                 st.bar_chart(df_chart, x="Tentativi", y="Volte", color="#6aaa64", height=180)
 
-    if st.button("⬅️  Torna al Menu", use_container_width=True, key="back_stats"):
-        st.session_state.pagina = "menu"
-        st.rerun()
+    st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="menu-btn">', unsafe_allow_html=True)
+    if st.button("🏠  Torna al Menù", use_container_width=True, key="back_stats"):
+        torna_al_menu()
+    st.markdown('</div>', unsafe_allow_html=True)
 
 def pagina_admin():
     render_header()
@@ -1243,6 +1193,7 @@ def pagina_admin():
                         st.rerun()
 
     with tab2:
+        st.caption("⚠️ Vengono registrate solo le partite della Parola del Giorno.")
         df = leggi_partite()
         if not df.empty:
             st.dataframe(df, use_container_width=True, hide_index=True)
@@ -1252,9 +1203,11 @@ def pagina_admin():
         st.caption(f"Parole valide totali: {len(PAROLE_VALIDE)}")
         st.info("Per aggiungere/rimuovere parole, modifica il file `parole.py` su GitHub.")
 
-    if st.button("⬅️  Torna al Menu", use_container_width=True, key="back_admin"):
-        st.session_state.pagina = "menu"
-        st.rerun()
+    st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="menu-btn">', unsafe_allow_html=True)
+    if st.button("🏠  Torna al Menù", use_container_width=True, key="back_admin"):
+        torna_al_menu()
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================================================
 # ROUTING

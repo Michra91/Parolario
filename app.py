@@ -1,13 +1,11 @@
 # app.py
 """
-Parolario v5 — Wordle in famiglia con autenticazione PIN, Admin panel,
-persistenza su Google Sheets e classifica solo per la Parola del Giorno.
+Parolario v6 — Wordle in famiglia con autenticazione PIN, Admin panel,
+cache ottimizzata, layout mobile compatto e batch update su Google Sheets.
 """
 
 import streamlit as st
 import random
-import json
-import os
 import hmac
 import hashlib
 from datetime import date, datetime
@@ -37,6 +35,7 @@ WORD_LEN = 5
 MAX_TRIES = 6
 REFRESH_MS = 30_000
 PAGINE_CON_REFRESH = {"classifica", "menu", "statistiche"}
+CACHE_TTL = 60  # secondi di cache per le letture Google Sheets
 
 # =========================================================
 # CSS PERSONALIZZATO
@@ -44,8 +43,8 @@ PAGINE_CON_REFRESH = {"classifica", "menu", "statistiche"}
 st.markdown("""
 <style>
     .main .block-container {
-        padding-top: 0.3rem !important;
-        padding-bottom: 0.3rem !important;
+        padding-top: 0.2rem !important;
+        padding-bottom: 0.2rem !important;
         padding-left: 0.5rem !important;
         padding-right: 0.5rem !important;
         max-width: 420px !important;
@@ -56,21 +55,55 @@ st.markdown("""
         background: linear-gradient(180deg, #121213 0%, #1a1a1c 100%);
         min-height: 100vh;
     }
-    div[data-testid="stVerticalBlock"] > div { gap: 0.15rem !important; }
+    div[data-testid="stVerticalBlock"] > div { gap: 0.1rem !important; }
     .element-container { margin-bottom: 0 !important; }
     div[data-testid="column"] { padding: 0 !important; }
 
-    /* Header Wordle */
+    /* ============================================
+       TOP BAR COMPATTA (solo in gioco)
+       ============================================ */
+    .compact-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        padding: 4px 2px;
+        margin-bottom: 0.2rem;
+    }
+    .compact-topbar .topbar-title {
+        font-size: 1.05rem;
+        font-weight: 900;
+        letter-spacing: 3px;
+        background: linear-gradient(135deg, #6aaa64, #c9b458);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        text-align: center;
+        flex: 1;
+    }
+    .compact-topbar .topbar-avatar {
+        width: 34px; height: 34px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 18px;
+        background: linear-gradient(135deg, #2a2a2c, #1a1a1b);
+        border: 2px solid #3a3a3c;
+        flex-shrink: 0;
+    }
+    .compact-topbar .topbar-avatar.admin {
+        border-color: #c9b458;
+        box-shadow: 0 0 10px rgba(201,180,88,0.3);
+    }
+
+    /* Header classico (login / menu) */
     .wordle-header {
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
-        padding: 8px 0 4px 0; margin-bottom: 0.3rem;
+        padding: 6px 0 3px 0; margin-bottom: 0.2rem;
     }
-    .wordle-tiles { display: flex; gap: 6px; margin-bottom: 6px; }
+    .wordle-tiles { display: flex; gap: 5px; margin-bottom: 5px; }
     .wordle-tile {
-        width: 32px; height: 32px;
+        width: 28px; height: 28px;
         display: flex; align-items: center; justify-content: center;
-        font-size: 16px; font-weight: 800;
+        font-size: 14px; font-weight: 800;
         border-radius: 6px; color: #fff;
         box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         animation: tile-bounce 2s ease-in-out infinite;
@@ -82,52 +115,53 @@ st.markdown("""
     .wordle-tile:nth-child(5) { animation-delay: 1.2s; }
     @keyframes tile-bounce {
         0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-4px); }
+        50% { transform: translateY(-3px); }
     }
     .tile-green  { background: linear-gradient(135deg, #6aaa64, #4d8a48); }
     .tile-yellow { background: linear-gradient(135deg, #c9b458, #a89540); }
     .tile-gray   { background: linear-gradient(135deg, #565758, #3a3a3c); }
     .wordle-title {
-        font-size: 1.6rem; font-weight: 900;
+        font-size: 1.4rem; font-weight: 900;
         letter-spacing: 4px; color: #ffffff;
         text-shadow: 0 0 20px rgba(106,170,100,0.4);
         margin: 0; text-align: center;
     }
     .wordle-subtitle {
-        font-size: 0.7rem; color: #a0a0a0;
+        font-size: 0.68rem; color: #a0a0a0;
         letter-spacing: 2px; text-transform: uppercase; margin-top: 2px;
     }
 
-    /* Griglia */
+    /* ============================================
+       GRIGLIA COMPATTA
+       ============================================ */
     .grid-wrapper {
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
-        margin: 0.3rem auto; width: 100%;
+        margin: 0.15rem auto; width: 100%;
     }
     .grid-row {
-        display: flex; gap: 5px;
-        justify-content: center; margin-bottom: 5px;
+        display: flex; gap: 4px;
+        justify-content: center; margin-bottom: 4px;
     }
     .grid-cell {
-        width: 56px; height: 56px;
+        width: 48px; height: 48px;
         display: flex; align-items: center; justify-content: center;
-        font-size: 28px; font-weight: 800;
-        border: 2px solid #3a3a3c; border-radius: 8px;
+        font-size: 24px; font-weight: 800;
+        border: 2px solid #3a3a3c; border-radius: 6px;
         text-transform: uppercase; color: #ffffff;
         background: #1a1a1b; transition: all 0.15s ease;
         line-height: 1;
-        box-shadow: inset 0 1px 2px rgba(255,255,255,0.03);
     }
     .grid-cell.filled  { border-color: #6a6a6c; background: #232324; }
     .grid-cell.correct {
         background: linear-gradient(135deg, #6aaa64, #4d8a48);
         border-color: #6aaa64;
-        box-shadow: 0 2px 8px rgba(106,170,100,0.4);
+        box-shadow: 0 2px 6px rgba(106,170,100,0.4);
     }
     .grid-cell.present {
         background: linear-gradient(135deg, #c9b458, #a89540);
         border-color: #c9b458;
-        box-shadow: 0 2px 8px rgba(201,180,88,0.4);
+        box-shadow: 0 2px 6px rgba(201,180,88,0.4);
     }
     .grid-cell.absent {
         background: #3a3a3c; border-color: #3a3a3c; color: #b0b0b0;
@@ -138,71 +172,65 @@ st.markdown("""
     }
     @keyframes pulse-hint {
         0%, 100% { box-shadow: 0 0 0 0 rgba(201,180,88,0.4); }
-        50%      { box-shadow: 0 0 0 8px rgba(201,180,88,0); }
+        50%      { box-shadow: 0 0 0 6px rgba(201,180,88,0); }
     }
 
     /* Pallini tentativi */
     .attempts-bar {
         display: flex; justify-content: center;
-        align-items: center; gap: 8px;
-        margin: 0.3rem 0; padding: 6px 0;
+        align-items: center; gap: 6px;
+        margin: 0.15rem 0; padding: 3px 0;
     }
     .attempt-dot {
-        width: 10px; height: 10px;
+        width: 8px; height: 8px;
         border-radius: 50%; background: #3a3a3c;
         transition: all 0.3s ease;
     }
-    .attempt-dot.used {
-        background: #6aaa64;
-        box-shadow: 0 0 8px rgba(106,170,100,0.6);
-    }
+    .attempt-dot.used { background: #6aaa64; box-shadow: 0 0 6px rgba(106,170,100,0.6); }
     .attempt-dot.current {
-        background: #c9b458;
-        box-shadow: 0 0 8px rgba(201,180,88,0.6);
+        background: #c9b458; box-shadow: 0 0 6px rgba(201,180,88,0.6);
         animation: dot-pulse 1.5s infinite;
     }
-    .attempt-dot.lost {
-        background: #e74c3c;
-    }
+    .attempt-dot.lost { background: #e74c3c; }
     @keyframes dot-pulse {
         0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.3); }
+        50% { transform: scale(1.25); }
     }
 
-    /* Input + INVIA */
+    /* ============================================
+       INPUT + INVIA
+       ============================================ */
     .stTextInput input {
-        font-size: 1.3rem !important; font-weight: 700 !important;
-        padding: 0.6rem 0.8rem !important; text-transform: uppercase;
-        text-align: center; letter-spacing: 4px;
+        font-size: 1.15rem !important; font-weight: 700 !important;
+        padding: 0.45rem 0.6rem !important; text-transform: uppercase;
+        text-align: center; letter-spacing: 3px;
         background: #1a1a1b !important; color: #fff !important;
         border: 2px solid #3a3a3c !important;
-        border-radius: 12px !important; height: 52px !important;
+        border-radius: 10px !important; height: 46px !important;
         line-height: 1 !important; transition: all 0.2s ease !important;
     }
     .stTextInput input::placeholder {
         color: #666 !important; text-transform: none;
-        letter-spacing: normal; font-weight: 400; font-size: 0.9rem;
+        letter-spacing: normal; font-weight: 400; font-size: 0.85rem;
     }
     .stTextInput input:focus {
         border-color: #6aaa64 !important;
-        box-shadow: 0 0 0 3px rgba(106,170,100,0.25),
-                    0 0 20px rgba(106,170,100,0.15) !important;
+        box-shadow: 0 0 0 3px rgba(106,170,100,0.25) !important;
         background: #222224 !important;
     }
     .btn-invia > button {
-        background: linear-gradient(135deg, #6aaa64, #4d8a48) !important;
+        background: #6aaa64 !important;
         border: none !important; color: #ffffff !important;
-        min-height: 52px !important; height: 52px !important;
-        font-size: 0.95rem !important; border-radius: 12px !important;
-        font-weight: 800 !important; letter-spacing: 1px;
-        padding: 0 0.5rem !important;
-        box-shadow: 0 4px 12px rgba(106,170,100,0.35) !important;
+        min-height: 46px !important; height: 46px !important;
+        font-size: 0.82rem !important; border-radius: 10px !important;
+        font-weight: 800 !important; letter-spacing: 0.5px;
+        padding: 0 0.4rem !important;
+        box-shadow: 0 3px 10px rgba(106,170,100,0.35) !important;
         transition: all 0.15s ease !important;
     }
     .btn-invia > button:hover {
-        background: linear-gradient(135deg, #7abb74, #5a9a54) !important;
-        box-shadow: 0 6px 16px rgba(106,170,100,0.5) !important;
-        transform: translateY(-1px);
+        background: #7abb74 !important;
+        box-shadow: 0 5px 14px rgba(106,170,100,0.5) !important;
     }
     .btn-invia > button:active { transform: translateY(1px) scale(0.98); }
 
@@ -210,27 +238,27 @@ st.markdown("""
         background: linear-gradient(135deg, #3a3520, #2a2a1b) !important;
         border: 2px solid #c9b458 !important;
         color: #f0d97a !important;
-        min-height: 42px !important; font-size: 0.88rem !important;
-        font-weight: 700 !important; border-radius: 10px !important;
-        padding: 0.4rem 0.6rem !important;
-        box-shadow: 0 0 15px rgba(201,180,88,0.15) !important;
+        min-height: 38px !important; font-size: 0.82rem !important;
+        font-weight: 700 !important; border-radius: 9px !important;
+        padding: 0.3rem 0.5rem !important;
+        box-shadow: 0 0 12px rgba(201,180,88,0.15) !important;
         transition: all 0.2s ease !important;
     }
     .hint-btn > button:hover {
         background: linear-gradient(135deg, #4a4525, #3a3a25) !important;
-        box-shadow: 0 0 25px rgba(201,180,88,0.35) !important;
+        box-shadow: 0 0 20px rgba(201,180,88,0.35) !important;
         color: #ffe680 !important;
     }
 
-    /* Pulsante Menù / Torna al Menù (sempre visibile) */
+    /* Pulsante Menù */
     .menu-btn > button {
         background: linear-gradient(135deg, #2a2a2c, #1a1a1b) !important;
         border: 1px solid #565758 !important;
         color: #e8e8e8 !important;
-        min-height: 44px !important;
-        font-size: 0.9rem !important;
+        min-height: 38px !important;
+        font-size: 0.82rem !important;
         font-weight: 700 !important;
-        border-radius: 10px !important;
+        border-radius: 9px !important;
         letter-spacing: 0.5px !important;
         transition: all 0.15s ease !important;
     }
@@ -238,7 +266,23 @@ st.markdown("""
         background: linear-gradient(135deg, #3a3a3c, #2a2a2c) !important;
         border-color: #6aaa64 !important;
         color: #ffffff !important;
-        transform: translateY(-1px);
+    }
+
+    /* Pulsante Menù mini (top bar) */
+    .menu-mini > button {
+        background: transparent !important;
+        border: 1px solid #3a3a3c !important;
+        color: #e8e8e8 !important;
+        min-height: 34px !important;
+        height: 34px !important;
+        font-size: 1rem !important;
+        padding: 0 !important;
+        border-radius: 8px !important;
+        transition: all 0.15s ease !important;
+    }
+    .menu-mini > button:hover {
+        border-color: #6aaa64 !important;
+        background: rgba(106,170,100,0.1) !important;
     }
 
     .stButton > button {
@@ -250,25 +294,24 @@ st.markdown("""
     .stButton > button:hover {
         background: #2a2a2c !important;
         border-color: #6aaa64 !important;
-        transform: translateY(-1px);
     }
     .stButton > button:active { transform: translateY(0); }
 
     .mode-btn > button {
-        min-height: 56px !important; font-size: 1rem !important;
-        border-radius: 14px !important;
+        min-height: 52px !important; font-size: 0.98rem !important;
+        border-radius: 12px !important;
     }
 
     /* Tab */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px !important; background: transparent !important;
+        gap: 6px !important; background: transparent !important;
         border-bottom: 2px solid #2a2a2c !important; padding: 0 !important;
     }
     .stTabs [data-baseweb="tab"] {
-        height: 48px !important; background: transparent !important;
-        border-radius: 0 !important; padding: 0 16px !important;
+        height: 44px !important; background: transparent !important;
+        border-radius: 0 !important; padding: 0 14px !important;
         color: #888 !important; font-weight: 700 !important;
-        font-size: 0.95rem !important;
+        font-size: 0.9rem !important;
         border-bottom: 3px solid transparent !important;
         transition: all 0.2s ease !important;
     }
@@ -278,28 +321,27 @@ st.markdown("""
         border-bottom: 3px solid #6aaa64 !important;
         background: rgba(106,170,100,0.08) !important;
     }
-    .stTabs [data-baseweb="tab-highlight"] { background: #6aaa64 !important; }
 
     /* Avatar */
     .user-avatar {
-        width: 48px; height: 48px; border-radius: 50%;
+        width: 44px; height: 44px; border-radius: 50%;
         display: flex; align-items: center; justify-content: center;
-        font-size: 26px;
+        font-size: 24px;
         background: linear-gradient(135deg, #2a2a2c, #1a1a1b);
         border: 2px solid #3a3a3c; flex-shrink: 0;
     }
     .user-avatar.admin {
         background: linear-gradient(135deg, #4a3a1b, #2a2a1b);
         border-color: #c9b458;
-        box-shadow: 0 0 15px rgba(201,180,88,0.3);
+        box-shadow: 0 0 12px rgba(201,180,88,0.3);
     }
     .user-info { flex: 1; min-width: 0; }
     .user-name {
-        font-size: 1.05rem; font-weight: 700; color: #ffffff;
+        font-size: 1rem; font-weight: 700; color: #ffffff;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .user-role {
-        font-size: 0.75rem; color: #a0a0a0;
+        font-size: 0.72rem; color: #a0a0a0;
         text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;
     }
     .user-role.admin { color: #c9b458; font-weight: 700; }
@@ -315,23 +357,22 @@ st.markdown("""
 
     /* Altri */
     .stAlert {
-        background: #1a1a1b !important; border-radius: 12px !important;
-        padding: 0.6rem 0.9rem !important; font-size: 0.85rem !important;
+        background: #1a1a1b !important; border-radius: 10px !important;
+        padding: 0.5rem 0.8rem !important; font-size: 0.82rem !important;
         border-left: 4px solid #6aaa64 !important;
     }
     .leader-card {
         background: linear-gradient(135deg, #1a1a1b, #202022);
-        border-radius: 12px; padding: 12px 16px; margin-bottom: 8px;
+        border-radius: 10px; padding: 10px 14px; margin-bottom: 6px;
         border-left: 4px solid #6aaa64;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
     }
     .leader-card.me {
         border-left-color: #c9b458;
         background: linear-gradient(135deg, #232324, #2a2a25);
-        box-shadow: 0 2px 12px rgba(201,180,88,0.15);
     }
-    .leader-name { font-size: 1.05rem; font-weight: 700; color: #ffffff; }
-    .leader-stats { font-size: 0.8rem; color: #b0b0b0; margin-top: 3px; }
+    .leader-name { font-size: 1rem; font-weight: 700; color: #ffffff; }
+    .leader-stats { font-size: 0.78rem; color: #b0b0b0; margin-top: 2px; }
 
     .live-dot {
         display: inline-block; width: 7px; height: 7px;
@@ -341,37 +382,18 @@ st.markdown("""
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
     .live-label {
         text-align: center; color: #6aaa64;
-        font-size: 0.72rem; margin-bottom: 0.5rem;
+        font-size: 0.7rem; margin-bottom: 0.4rem;
     }
-
-    .badge-grid {
-        display: flex; flex-wrap: wrap; gap: 8px;
-        justify-content: center; margin: 0.75rem 0;
-    }
-    .badge-card {
-        width: 95px; padding: 10px 6px; border-radius: 12px;
-        text-align: center; border: 2px solid #3a3a3c;
-        background: linear-gradient(135deg, #1a1a1b, #232324);
-    }
-    .badge-card.earned {
-        border-color: #c9b458;
-        background: linear-gradient(135deg, #2a2a1b, #1a1a1b);
-        box-shadow: 0 0 15px rgba(201,180,88,0.3);
-    }
-    .badge-card.locked { opacity: 0.35; filter: grayscale(0.8); }
-    .badge-icon { font-size: 1.5rem; margin-bottom: 4px; }
-    .badge-name { font-size: 0.75rem; font-weight: 700; color: #fff; }
-    .badge-desc { font-size: 0.62rem; color: #a0a0a0; margin-top: 2px; line-height: 1.25; }
 
     .stat-item { text-align: center; }
     .stat-value {
-        font-size: 1.6rem; font-weight: 800;
+        font-size: 1.5rem; font-weight: 800;
         background: linear-gradient(135deg, #6aaa64, #c9b458);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         background-clip: text;
     }
     .stat-label {
-        font-size: 0.62rem; color: #a0a0a0;
+        font-size: 0.6rem; color: #a0a0a0;
         text-transform: uppercase; letter-spacing: 0.4px;
     }
 
@@ -420,21 +442,28 @@ st.markdown("""
 
     footer {visibility: hidden;}
 
+    /* Mobile compatto */
     @media (max-width: 380px) {
-        .grid-cell { width: 50px; height: 50px; font-size: 24px; }
+        .grid-cell { width: 44px; height: 44px; font-size: 22px; }
         .grid-row { gap: 3px; margin-bottom: 3px; }
-        .wordle-title { font-size: 1.3rem; letter-spacing: 3px; }
-        .wordle-tile { width: 28px; height: 28px; font-size: 14px; }
-        .stTextInput input { height: 48px !important; letter-spacing: 2px; }
-        .btn-invia > button { min-height: 48px !important; height: 48px !important; }
+        .wordle-title { font-size: 1.2rem; letter-spacing: 3px; }
+        .wordle-tile { width: 24px; height: 24px; font-size: 12px; }
+        .stTextInput input { height: 44px !important; letter-spacing: 2px; }
+        .btn-invia > button { min-height: 44px !important; height: 44px !important; }
+        .compact-topbar .topbar-title { font-size: 0.95rem; letter-spacing: 2px; }
+        .compact-topbar .topbar-avatar { width: 30px; height: 30px; font-size: 16px; }
     }
     @media (max-height: 720px) {
-        .grid-cell { width: 50px; height: 50px; font-size: 24px; }
+        .grid-cell { width: 44px; height: 44px; font-size: 22px; }
         .grid-row { margin-bottom: 3px; }
-        .wordle-title { font-size: 1.3rem; }
-        .wordle-tile { width: 28px; height: 28px; font-size: 14px; }
-        .stTextInput input { height: 48px !important; }
-        .btn-invia > button { min-height: 48px !important; height: 48px !important; }
+        .wordle-title { font-size: 1.2rem; }
+        .wordle-tile { width: 24px; height: 24px; font-size: 12px; }
+        .stTextInput input { height: 44px !important; }
+        .btn-invia > button { min-height: 44px !important; height: 44px !important; }
+    }
+    @media (max-height: 600px) {
+        .grid-cell { width: 40px; height: 40px; font-size: 20px; }
+        .grid-row { gap: 3px; margin-bottom: 2px; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -469,24 +498,45 @@ def get_worksheet(nome: str):
     except gspread.exceptions.WorksheetNotFound:
         return None
 
+# =========================================================
+# LETTURA CON CACHE
+# =========================================================
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def leggi_utenti() -> pd.DataFrame:
+    """Legge il foglio Utenti (cache 60s)."""
     ws = get_worksheet("Utenti")
     if ws is None:
         return pd.DataFrame(columns=["Username", "PIN_Hash", "Ruolo", "Data_Creazione"])
-    dati = ws.get_all_records()
+    try:
+        dati = ws.get_all_records()
+    except Exception:
+        return pd.DataFrame(columns=["Username", "PIN_Hash", "Ruolo", "Data_Creazione"])
     if not dati:
         return pd.DataFrame(columns=["Username", "PIN_Hash", "Ruolo", "Data_Creazione"])
     return pd.DataFrame(dati)
 
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def leggi_partite() -> pd.DataFrame:
+    """Legge il foglio Partite (cache 60s)."""
     ws = get_worksheet("Partite")
     if ws is None:
         return pd.DataFrame(columns=["Data", "Username", "Modalità", "Tentativi_Usati", "Vinta", "Punti_Ottenuti"])
-    dati = ws.get_all_records()
+    try:
+        dati = ws.get_all_records()
+    except Exception:
+        return pd.DataFrame(columns=["Data", "Username", "Modalità", "Tentativi_Usati", "Vinta", "Punti_Ottenuti"])
     if not dati:
         return pd.DataFrame(columns=["Data", "Username", "Modalità", "Tentativi_Usati", "Vinta", "Punti_Ottenuti"])
     return pd.DataFrame(dati)
 
+def invalida_cache():
+    """Pulisce la cache dopo ogni scrittura."""
+    leggi_utenti.clear()
+    leggi_partite.clear()
+
+# =========================================================
+# SCRITTURA
+# =========================================================
 def hash_pin(pin: str) -> str:
     return hashlib.sha256(str(pin).strip().encode("utf-8")).hexdigest()
 
@@ -509,16 +559,14 @@ def registra_utente(username: str, pin: str, ruolo: str = "User") -> bool:
             ruolo,
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         ])
+        invalida_cache()
         return True
     except Exception as e:
         st.error(f"Errore registrazione: {e}")
         return False
 
 def registra_partita(username: str, modalita: str, tentativi: int, vinta: bool, punti: int):
-    """
-    Salva la partita nel foglio Partite.
-    ⚠️ Viene chiamata SOLO per la modalità "Parola del Giorno".
-    """
+    """Salva la partita. Chiamata SOLO per 'Parola del Giorno'."""
     ws = get_worksheet("Partite")
     if ws is None:
         return
@@ -526,14 +574,18 @@ def registra_partita(username: str, modalita: str, tentativi: int, vinta: bool, 
         ws.append_row([
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             username,
-            "Giorno",  # Solo la modalità Giorno viene salvata
+            "Giorno",
             tentativi,
             "Sì" if vinta else "No",
             punti,
         ])
+        invalida_cache()
     except Exception as e:
         st.error(f"Errore registrazione partita: {e}")
 
+# =========================================================
+# QUERY DERIVATE
+# =========================================================
 def ha_giocato_oggi(username: str):
     df = leggi_partite()
     if df.empty:
@@ -554,13 +606,9 @@ def ha_giocato_oggi(username: str):
     }
 
 def calcola_classifica() -> pd.DataFrame:
-    """
-    Calcola la classifica dalle partite registrate (solo Parola del Giorno).
-    """
     df = leggi_partite()
     if df.empty:
         return pd.DataFrame(columns=["Username", "Punti", "Vittorie", "Partite", "Streak"])
-    # Filtra solo le partite di modalità "Giorno" (sicurezza extra)
     df = df[df["Modalità"] == "Giorno"]
     if df.empty:
         return pd.DataFrame(columns=["Username", "Punti", "Vittorie", "Partite", "Streak"])
@@ -583,6 +631,60 @@ def calcola_classifica() -> pd.DataFrame:
         streak_map[utente] = streak
     agg["Streak"] = agg["Username"].map(streak_map)
     return agg.sort_values("Punti", ascending=False).reset_index(drop=True)
+
+# =========================================================
+# ADMIN - BATCH UPDATE
+# =========================================================
+def admin_reset_punti(username: str) -> bool:
+    """
+    Rimuove tutte le partite di un utente usando un update in batch.
+    Evita il rate limit di Google (HTTP 429).
+    """
+    try:
+        sh = get_gsheet_connection()
+        if sh is None:
+            return False
+        ws = sh.worksheet("Partite")
+        tutti = ws.get_all_values()
+        if len(tutti) < 2:
+            return True  # solo intestazione
+        header = tutti[0]
+        # Filtra righe dell'utente
+        righe_rimaste = [header] + [r for r in tutti[1:] if len(r) > 1 and r[1] != username]
+        # Svuota il foglio e riscrive tutto in un colpo
+        ws.clear()
+        if len(righe_rimaste) == 1:
+            ws.update(values=righe_rimaste, range_name="A1")
+        else:
+            ws.update(values=righe_rimaste, range_name=f"A1:F{len(righe_rimaste)}")
+        invalida_cache()
+        return True
+    except Exception as e:
+        st.error(f"Errore reset: {e}")
+        return False
+
+def admin_elimina_utente(username: str) -> bool:
+    """Elimina un utente aggiornando in batch la scheda Utenti."""
+    try:
+        sh = get_gsheet_connection()
+        if sh is None:
+            return False
+        ws = sh.worksheet("Utenti")
+        tutti = ws.get_all_values()
+        if len(tutti) < 2:
+            return True
+        header = tutti[0]
+        righe_rimaste = [header] + [r for r in tutti[1:] if len(r) > 0 and r[0] != username]
+        ws.clear()
+        if len(righe_rimaste) == 1:
+            ws.update(values=righe_rimaste, range_name="A1")
+        else:
+            ws.update(values=righe_rimaste, range_name=f"A1:D{len(righe_rimaste)}")
+        invalida_cache()
+        return True
+    except Exception as e:
+        st.error(f"Errore eliminazione: {e}")
+        return False
 
 # =========================================================
 # AVATAR E RUOLI
@@ -700,7 +802,6 @@ def usa_suggerimento():
     st.toast(f"💡 Posizione {pos+1}: **{lettera}**", icon="💡")
 
 def torna_al_menu():
-    """Riporta al menu principale mantenendo la sessione."""
     st.session_state.pagina = "menu"
     for k in ["modalita", "soluzione", "tentativi", "corrente",
               "finita", "vinto", "punteggio_assegnato",
@@ -712,6 +813,7 @@ def torna_al_menu():
 # RENDER COMPONENTI
 # =========================================================
 def render_header():
+    """Header classico (login/menu) con tessere Wordle."""
     st.markdown("""
         <div class="wordle-header">
             <div class="wordle-tiles">
@@ -725,6 +827,33 @@ def render_header():
             <div class="wordle-subtitle">Indovina la parola di 5 lettere</div>
         </div>
     """, unsafe_allow_html=True)
+
+def render_topbar_compatta():
+    """
+    Top bar compatta: [🏠 Menu] [🟩 PAROLARIO] [avatar]
+    Da usare in gioco per risparmiare spazio verticale.
+    """
+    utente = st.session_state.utente or "—"
+    ruolo = st.session_state.get("ruolo", "User")
+    avatar = get_avatar(utente, ruolo)
+    avatar_classe = "admin" if ruolo == "Admin" else ""
+
+    col_menu, col_title, col_avatar = st.columns([1, 4, 1], gap="small")
+    with col_menu:
+        st.markdown('<div class="menu-mini">', unsafe_allow_html=True)
+        if st.button("🏠", use_container_width=True, key="topbar_menu"):
+            torna_al_menu()
+        st.markdown('</div>', unsafe_allow_html=True)
+    with col_title:
+        st.markdown('<div class="compact-topbar"><div class="topbar-title">🟩 PAROLARIO</div></div>',
+                    unsafe_allow_html=True)
+    with col_avatar:
+        st.markdown(
+            f'<div style="display:flex;justify-content:flex-end;">'
+            f'<div class="topbar-avatar {avatar_classe}">{avatar}</div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
 
 def render_griglia():
     sugg_pos = st.session_state.get("suggerimento_pos")
@@ -938,7 +1067,7 @@ def render_login():
                         st.success(f"Benvenuto {nuovo_nome}!")
                         st.rerun()
 
-    st.markdown('<div style="height:0.8rem;"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:0.6rem;"></div>', unsafe_allow_html=True)
     if st.button("🎭  GIOCA COME OSPITE", use_container_width=True, key="btn_guest"):
         st.session_state.utente = f"Ospite_{random.randint(1000, 9999)}"
         st.session_state.ruolo = "Guest"
@@ -961,7 +1090,7 @@ def pagina_menu():
                 f"{'Vinto' if gia_giocato['vinta'] else 'Non indovinata'} "
                 f"in {gia_giocato['tentativi']} tentativi — {gia_giocato['punti']} punti.")
 
-    st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:0.2rem;"></div>', unsafe_allow_html=True)
     st.markdown('<div class="mode-btn">', unsafe_allow_html=True)
     if st.button("📅  PAROLA DEL GIORNO", use_container_width=True, key="m_daily",
                  disabled=bool(gia_giocato)):
@@ -974,7 +1103,7 @@ def pagina_menu():
         st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:0.2rem;"></div>', unsafe_allow_html=True)
     c1, c2 = st.columns(2, gap="small")
     with c1:
         if st.button("🏆  Classifica", use_container_width=True, key="m_leader"):
@@ -985,21 +1114,17 @@ def pagina_menu():
             st.session_state.pagina = "statistiche"
             st.rerun()
 
-    st.markdown('<div style="height:0.4rem;"></div>', unsafe_allow_html=True)
-    st.caption("📅 Parola del Giorno → conta in classifica · 🎲 Gioca Ancora → solo allenamento")
+    st.caption("📅 Parola del Giorno → conta in classifica · 🎲 Gioca Ancora → allenamento")
 
 def pagina_gioco():
-    render_header()
+    # ✅ TOP BAR COMPATTA invece dell'header grande
+    render_topbar_compatta()
+
     mod = st.session_state.modalita
     if mod == "daily":
-        titolo_mod = "📅 Parola del Giorno"
-        info_extra = '<div style="text-align:center;color:#6aaa64;font-size:0.68rem;margin-bottom:0.2rem;">✦ Questa partita conta in classifica ✦</div>'
+        info_extra = '<div style="text-align:center;color:#6aaa64;font-size:0.66rem;margin:0;">✦ Conta in classifica ✦</div>'
     else:
-        titolo_mod = "🎲 Gioco Illimitato"
-        info_extra = '<div style="text-align:center;color:#a0a0a0;font-size:0.68rem;margin-bottom:0.2rem;">Modalità allenamento — non aggiorna la classifica</div>'
-
-    st.markdown(f'<div class="mode-label" style="text-align:center;color:#a0a0a0;font-size:0.72rem;margin-bottom:0.2rem;">{titolo_mod}</div>',
-                unsafe_allow_html=True)
+        info_extra = '<div style="text-align:center;color:#a0a0a0;font-size:0.66rem;margin:0;">Modalità allenamento</div>'
     st.markdown(info_extra, unsafe_allow_html=True)
 
     render_griglia()
@@ -1012,16 +1137,15 @@ def pagina_gioco():
             n = len(st.session_state.tentativi)
             punti = calcola_punti(n)
             if not st.session_state.punteggio_assegnato:
-                # ✅ SOLO Parola del Giorno salva in classifica
                 if mod == "daily" and st.session_state.get("ruolo") != "Guest":
                     registra_partita(st.session_state.utente, "daily", n, True, punti)
                 st.session_state.punteggio_assegnato = True
                 render_palloncini()
 
             if mod == "daily":
-                st.success(f"🎉 Bravissimo! In {n} tentativi — **+{punti} punti in classifica!**")
+                st.success(f"🎉 Bravissimo! In {n} tentativi — **+{punti} punti!**")
             else:
-                st.success(f"🎉 Bravo! In {n} tentativi — *allenamento completato*")
+                st.success(f"🎉 Bravo! In {n} tentativi — *allenamento*")
 
             with st.expander("📋 Condividi risultato"):
                 st.code(genera_risultato_condivisione(), language=None)
@@ -1037,25 +1161,26 @@ def pagina_gioco():
                             f"[Wikizionario](https://it.wiktionary.org/wiki/{p.lower()})")
         else:
             if not st.session_state.punteggio_assegnato:
-                # ✅ SOLO Parola del Giorno salva la sconfitta in classifica
                 if mod == "daily" and st.session_state.get("ruolo") != "Guest":
                     registra_partita(st.session_state.utente, "daily", MAX_TRIES, False, 0)
                 st.session_state.punteggio_assegnato = True
 
             if mod == "daily":
-                st.error(f"😢 Peccato! La parola era: **{st.session_state.soluzione}** (sconfitta registrata)")
+                st.error(f"😢 Peccato! La parola era: **{st.session_state.soluzione}**")
             else:
-                st.error(f"😢 Peccato! La parola era: **{st.session_state.soluzione}** (allenamento)")
+                st.error(f"😢 Peccato! Era: **{st.session_state.soluzione}** (allenamento)")
 
-        st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
+        st.markdown('<div style="height:0.2rem;"></div>', unsafe_allow_html=True)
         c1, c2 = st.columns(2, gap="small")
         with c1:
             if st.button("🔄  Nuova", use_container_width=True, key="end_new"):
                 reset_partita("unlimited")
                 st.rerun()
         with c2:
+            st.markdown('<div class="menu-btn">', unsafe_allow_html=True)
             if st.button("🏠  Menù", use_container_width=True, key="end_menu"):
                 torna_al_menu()
+            st.markdown('</div>', unsafe_allow_html=True)
         return
 
     # ============================================
@@ -1084,22 +1209,19 @@ def pagina_gioco():
     # Suggerimento
     if not st.session_state.suggerimento_usato:
         st.markdown('<div class="hint-btn">', unsafe_allow_html=True)
-        if st.button("💡  SUGGERIMENTO  (una sola volta per partita)",
-                     use_container_width=True, key="hint_btn"):
+        if st.button("💡  SUGGERIMENTO", use_container_width=True, key="hint_btn"):
             usa_suggerimento()
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     else:
         st.markdown(
-            '<div style="text-align:center;color:#c9b458;font-size:0.75rem;'
-            'padding:0.35rem 0;letter-spacing:0.5px;">💡 Suggerimento già usato</div>',
+            '<div style="text-align:center;color:#c9b458;font-size:0.72rem;'
+            'padding:0.25rem 0;letter-spacing:0.5px;">💡 Suggerimento usato</div>',
             unsafe_allow_html=True
         )
 
-    # ============================================
-    # PULSANTE TORNA AL MENÙ (sempre visibile)
-    # ============================================
-    st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
+    # Pulsante Menù in basso (ridondante ma comodo)
+    st.markdown('<div style="height:0.2rem;"></div>', unsafe_allow_html=True)
     st.markdown('<div class="menu-btn">', unsafe_allow_html=True)
     if st.button("🏠  Torna al Menù", use_container_width=True, key="play_menu_btn"):
         torna_al_menu()
@@ -1107,12 +1229,11 @@ def pagina_gioco():
 
 def pagina_classifica():
     render_header()
-    st.markdown('<div style="text-align:center;color:#fff;font-size:1rem;font-weight:700;margin:0.5rem 0;">🏆 Classifica</div>',
+    st.markdown('<div style="text-align:center;color:#fff;font-size:0.95rem;font-weight:700;margin:0.4rem 0;">🏆 Classifica</div>',
                 unsafe_allow_html=True)
     st.markdown('<div class="live-label"><span class="live-dot"></span>'
-                'Solo Parola del Giorno · Dati live</div>', unsafe_allow_html=True)
+                'Solo Parola del Giorno · Live</div>', unsafe_allow_html=True)
     render_classifica()
-    st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
     st.markdown('<div class="menu-btn">', unsafe_allow_html=True)
     if st.button("🏠  Torna al Menù", use_container_width=True, key="back_menu"):
         torna_al_menu()
@@ -1121,7 +1242,7 @@ def pagina_classifica():
 def pagina_statistiche():
     render_header()
     utente = st.session_state.utente
-    st.markdown(f'<div style="text-align:center;color:#fff;font-size:1rem;font-weight:700;margin:0.5rem 0;">📊 {utente}</div>',
+    st.markdown(f'<div style="text-align:center;color:#fff;font-size:0.95rem;font-weight:700;margin:0.4rem 0;">📊 {utente}</div>',
                 unsafe_allow_html=True)
 
     df = leggi_partite()
@@ -1130,7 +1251,7 @@ def pagina_statistiche():
     else:
         df_u = df[df["Username"] == utente]
         if df_u.empty:
-            st.info("Nessuna partita registrata. Gioca la Parola del Giorno!")
+            st.info("Nessuna partita. Gioca la Parola del Giorno!")
         else:
             partite = len(df_u)
             vittorie = len(df_u[df_u["Vinta"] == "Sì"])
@@ -1147,12 +1268,11 @@ def pagina_statistiche():
 
             dist = df_u[df_u["Vinta"] == "Sì"]["Tentativi_Usati"].value_counts().sort_index()
             if not dist.empty:
-                st.markdown('<div style="color:#fff;font-size:0.9rem;font-weight:700;margin:0.6rem 0 0.3rem 0;">📈 Distribuzione</div>',
+                st.markdown('<div style="color:#fff;font-size:0.85rem;font-weight:700;margin:0.5rem 0 0.2rem 0;">📈 Distribuzione</div>',
                             unsafe_allow_html=True)
                 df_chart = pd.DataFrame({"Tentativi": [f"{i}°" for i in dist.index], "Volte": dist.values})
-                st.bar_chart(df_chart, x="Tentativi", y="Volte", color="#6aaa64", height=180)
+                st.bar_chart(df_chart, x="Tentativi", y="Volte", color="#6aaa64", height=170)
 
-    st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
     st.markdown('<div class="menu-btn">', unsafe_allow_html=True)
     if st.button("🏠  Torna al Menù", use_container_width=True, key="back_stats"):
         torna_al_menu()
@@ -1160,7 +1280,7 @@ def pagina_statistiche():
 
 def pagina_admin():
     render_header()
-    st.markdown('<div style="text-align:center;color:#c9b458;font-size:1rem;font-weight:700;margin:0.5rem 0;">👑 PANNELLO ADMIN</div>',
+    st.markdown('<div style="text-align:center;color:#c9b458;font-size:0.95rem;font-weight:700;margin:0.4rem 0;">👑 PANNELLO ADMIN</div>',
                 unsafe_allow_html=True)
 
     tab1, tab2, tab3 = st.tabs(["👥 Utenti", "📊 Partite", "📖 Parole"])
@@ -1170,40 +1290,29 @@ def pagina_admin():
         if not df.empty:
             st.dataframe(df[["Username", "Ruolo", "Data_Creazione"]], use_container_width=True, hide_index=True)
             utente_sel = st.selectbox("Seleziona utente", df["Username"].tolist(), key="admin_user_reset")
-            col1, col2 = st.columns(2)
+            col1, col2 = st.columns(2, gap="small")
             with col1:
                 if st.button("🔄 Reset Punti", use_container_width=True, key="admin_reset_punti"):
-                    ws = get_worksheet("Partite")
-                    if ws:
-                        celle = ws.findall(utente_sel)
-                        righe_da_cancellare = sorted({c.row for c in celle if c.col == 2}, reverse=True)
-                        for riga in righe_da_cancellare:
-                            ws.delete_rows(riga)
+                    if admin_reset_punti(utente_sel):
                         st.success(f"Punti di {utente_sel} resettati.")
                         st.rerun()
             with col2:
                 if st.button("🗑️ Elimina Utente", use_container_width=True, key="admin_del_user"):
-                    ws = get_worksheet("Utenti")
-                    if ws:
-                        celle = ws.findall(utente_sel)
-                        righe = sorted({c.row for c in celle if c.col == 1}, reverse=True)
-                        for riga in righe:
-                            ws.delete_rows(riga)
+                    if admin_elimina_utente(utente_sel):
                         st.success(f"Utente {utente_sel} eliminato.")
                         st.rerun()
 
     with tab2:
-        st.caption("⚠️ Vengono registrate solo le partite della Parola del Giorno.")
+        st.caption("⚠️ Solo partite della Parola del Giorno.")
         df = leggi_partite()
         if not df.empty:
             st.dataframe(df, use_container_width=True, hide_index=True)
 
     with tab3:
-        st.caption(f"Parole soluzione attuali: {len(PAROLE_SOLUZIONE)}")
-        st.caption(f"Parole valide totali: {len(PAROLE_VALIDE)}")
-        st.info("Per aggiungere/rimuovere parole, modifica il file `parole.py` su GitHub.")
+        st.caption(f"Parole soluzione: {len(PAROLE_SOLUZIONE)}")
+        st.caption(f"Parole valide: {len(PAROLE_VALIDE)}")
+        st.info("Per modificare le parole, aggiorna `parole.py` su GitHub.")
 
-    st.markdown('<div style="height:0.3rem;"></div>', unsafe_allow_html=True)
     st.markdown('<div class="menu-btn">', unsafe_allow_html=True)
     if st.button("🏠  Torna al Menù", use_container_width=True, key="back_admin"):
         torna_al_menu()
@@ -1223,11 +1332,17 @@ defaults = {
 for k, v in defaults.items():
     st.session_state.setdefault(k, v)
 
-if st.session_state.utente and st.session_state.pagina in PAGINE_CON_REFRESH:
-    st_autorefresh(interval=REFRESH_MS, key="auto_refresh")
-
 if st.session_state.utente:
     render_sidebar()
+    # 🔍 DEBUG TEMPORANEO
+    with st.sidebar:
+        st.markdown("---")
+        st.markdown("### 🔍 DEBUG")
+        st.write("utente:", repr(st.session_state.get("utente")))
+        st.write("ruolo:", repr(st.session_state.get("ruolo")))
+        st.write("tipo ruolo:", type(st.session_state.get("ruolo")).__name__)
+        st.write("è Admin?:", st.session_state.get("ruolo") == "Admin")
+        st.write("pagina:", repr(st.session_state.get("pagina")))
 
 if not st.session_state.utente:
     render_login()
